@@ -25,6 +25,12 @@ public class GuiScrollPanel extends GuiPanel {
         return contentPanel;
     }
 
+    public float getScrollY() { return scrollY; }
+    public void setScrollY(float y) { this.scrollY = y; }
+    
+    public float getTargetScrollY() { return targetScrollY; }
+    public void setTargetScrollY(float y) { this.targetScrollY = y; }
+
     @Override
     public void addChild(GuiComponent child) {
         contentPanel.addChild(child); // Add to inner panel instead
