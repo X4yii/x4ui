@@ -1,0 +1,16 @@
+[
+{
+  "modid": "x4ui",
+  "name": "X4yi's UI",
+  "description": "A dynamic, flexible UI Framework for Minecraft Forge.",
+  "version": "${version}",
+  "mcversion": "${mcversion}",
+  "url": "",
+  "updateUrl": "",
+  "authorList": ["x4yi"],
+  "credits": "x4yi",
+  "logoFile": "",
+  "screenshots": [],
+  "dependencies": []
+}
+]

@@ -1,0 +1,82 @@
+buildscript {
+    repositories {
+        mavenCentral()
+        maven {
+            name = "forge"
+            url = "https://maven.minecraftforge.net"
+        }
+    }
+    dependencies {
+        classpath(group: 'com.anatawa12.forge', name: 'ForgeGradle', version: '2.3-1.0.+') {
+            changing = true
+        }
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+apply plugin: 'net.minecraftforge.gradle.forge'
+apply plugin: 'eclipse'
+apply plugin: 'maven-publish'
+
+version = "1.0.0"
+group = "com.x4yi.x4ui"
+archivesBaseName = "x4ui"
+
+sourceCompatibility = targetCompatibility = '1.8'
+
+minecraft {
+    version = '1.12.2-14.23.5.2864'
+    runDir  = 'run'
+    mappings = 'snapshot_20171003'
+}
+
+dependencies {
+}
+
+tasks.withType(JavaExec) {
+    if (name == 'runClient') {
+        def wayland = System.getenv('WAYLAND_DISPLAY')
+        def x11     = System.getenv('DISPLAY')
+        if (wayland) {
+            environment 'WAYLAND_DISPLAY', wayland
+            if (x11) {
+                environment 'DISPLAY', x11
+            } else {
+                environment 'DISPLAY', ':0'
+            }
+        } else if (x11) {
+            environment 'DISPLAY', x11
+        } else {
+            environment 'DISPLAY', ':0'
+        }
+        environment '_JAVA_AWT_WM_NONREPARENTING', '1'
+        jvmArgs '-Xmx768M'
+        jvmArgs '-Dorg.lwjgl.opengl.Display.allowSoftwareOpenGL=true'
+        jvmArgs '-Djava.awt.headless=false'
+    }
+}
+
+jar {
+    manifest {
+        attributes([
+            "Specification-Title"     : "x4ui",
+            "Specification-Vendor"    : "x4yi",
+            "Specification-Version"   : "${version}",
+            "Implementation-Title"    : project.name,
+            "Implementation-Version"  : "${version}",
+            "Implementation-Vendor"   : "x4yi",
+            "Implementation-Timestamp": new Date().format("yyyy-MM-dd'T'HH:mm:ssZ"),
+        ])
+    }
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            artifact jar
+        }
+    }
+}
