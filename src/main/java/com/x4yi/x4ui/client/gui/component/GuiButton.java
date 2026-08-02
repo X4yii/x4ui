@@ -1,58 +1,41 @@
 package com.x4yi.x4ui.client.gui.component;
-
 import net.minecraft.client.renderer.GlStateManager;
-
 public class GuiButton extends GuiComponent {
     protected String text;
     protected Runnable onClick;
-    
     protected int baseBgColor = 0xFF16161E;
     protected int hoverBgColor = 0xFF2C2C36;
     protected int baseBorderColor = 0xFF2C2C36;
     protected int hoverBorderColor = 0xFFFFFFFF;
     protected int textColor = 0xFFFFFFFF;
-    
     protected float hoverLerp = 0.0f;
-    
     public GuiButton(int x, int y, int width, int height, String text, Runnable onClick) {
         super(x, y, width, height);
         this.text = text;
         this.onClick = onClick;
     }
-    
     @Override
     public void update() {
         super.update();
-        // Mouse hover logic needs global mouse coordinates.
-        // We will pass mouseX/mouseY to drawComponent, but for update we might need it.
-        // Forge/MC doesn't easily provide them in update() without fetching from Mouse.
-        // We can do lerping in drawComponent for now since it has partialTicks and mouseX/Y.
     }
-    
     @Override
     protected void drawSelf(int mouseX, int mouseY, float partialTicks) {
         boolean hovered = isMouseOver(mouseX, mouseY) && enabled;
-        
         if (hovered) {
             hoverLerp = Math.min(1.0f, hoverLerp + 0.15f);
         } else {
             hoverLerp = Math.max(0.0f, hoverLerp - 0.15f);
         }
-        
         int currentBg = lerpColor(baseBgColor, hoverBgColor, hoverLerp);
         int currentBorder = lerpColor(baseBorderColor, hoverBorderColor, hoverLerp);
-        
         int absX = getAbsoluteX();
         int absY = getAbsoluteY();
-        
         GlStateManager.color(1.0f, 1.0f, 1.0f, 1.0f);
         drawRect(absX, absY, absX + width, absY + height, currentBg);
         drawBorder(absX, absY, absX + width, absY + height, currentBorder);
-        
         int currentTextColor = enabled ? textColor : 0xFF888892;
         drawCenteredString(text, absX + width / 2, absY + (height - 8) / 2, currentTextColor);
     }
-    
     @Override
     public boolean mouseClicked(int mouseX, int mouseY, int mouseButton) {
         if (!super.mouseClicked(mouseX, mouseY, mouseButton)) {
@@ -66,7 +49,6 @@ public class GuiButton extends GuiComponent {
         }
         return false;
     }
-    
     protected void playClickSound() {
         mc.getSoundHandler().playSound(
             net.minecraft.client.audio.PositionedSoundRecord.getMasterRecord(
@@ -74,12 +56,9 @@ public class GuiButton extends GuiComponent {
             )
         );
     }
-    
     public void setText(String text) { this.text = text; }
     public String getText() { return text; }
     public void setOnClick(Runnable onClick) { this.onClick = onClick; }
-    
-    // Compatibility methods with old framework
     public void setBgColor(int color) { this.baseBgColor = color; }
     public void setHoverBgColor(int color) { this.hoverBgColor = color; }
     public void setTextColor(int color) { this.textColor = color; }

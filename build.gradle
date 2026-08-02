@@ -12,30 +12,23 @@ buildscript {
         }
     }
 }
-
 repositories {
     mavenCentral()
 }
-
 apply plugin: 'net.minecraftforge.gradle.forge'
 apply plugin: 'eclipse'
 apply plugin: 'maven-publish'
-
 version = "r1.0b1"
 group = "com.x4yi.x4ui"
 archivesBaseName = "x4ui"
-
 sourceCompatibility = targetCompatibility = '1.8'
-
 minecraft {
     version = '1.12.2-14.23.5.2864'
     runDir  = 'run'
     mappings = 'snapshot_20171003'
 }
-
 dependencies {
 }
-
 tasks.withType(JavaExec) {
     if (name == 'runClient') {
         def wayland = System.getenv('WAYLAND_DISPLAY')
@@ -58,7 +51,6 @@ tasks.withType(JavaExec) {
         jvmArgs '-Djava.awt.headless=false'
     }
 }
-
 jar {
     manifest {
         attributes([
@@ -72,7 +64,6 @@ jar {
         ])
     }
 }
-
 publishing {
     publications {
         mavenJava(MavenPublication) {
