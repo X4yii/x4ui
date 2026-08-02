@@ -13,6 +13,8 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class GuiMarkdown extends GuiComponent {
+    private static final Pattern IMG_PATTERN = Pattern.compile("^!\\[(.*?)\\]\\((.*?)\\)");
+
     private String rawText;
     private int textColor = 0xFFE0E0E6;
     private List<MarkdownNode> nodes = new ArrayList<>();
@@ -59,8 +61,7 @@ public class GuiMarkdown extends GuiComponent {
             }
             
             // Image: ![alt](domain:path)
-            Pattern imgPattern = Pattern.compile("^!\\[(.*?)\\]\\((.*?)\\)");
-            Matcher m = imgPattern.matcher(trimmed);
+            Matcher m = IMG_PATTERN.matcher(trimmed);
             if (m.find()) {
                 String alt = m.group(1);
                 String path = m.group(2);

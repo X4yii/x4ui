@@ -16,6 +16,11 @@ public abstract class GuiBaseScreen extends GuiScreen {
     protected float animationProgress = 0.0f;
     protected boolean isAnimating = true;
     protected static final float ANIMATION_SPEED = 0.15f;
+    
+    /**
+     * @deprecated Use {@link #rootPanel}.addChild() instead.
+     */
+    @Deprecated
     protected java.util.List<com.x4yi.x4ui.client.gui.component.GuiComponent> components = new java.util.ArrayList<com.x4yi.x4ui.client.gui.component.GuiComponent>() {
         @Override
         public void clear() {
@@ -35,9 +40,12 @@ public abstract class GuiBaseScreen extends GuiScreen {
         this.title = title;
     }
 
+    public static int currentScaleFactor = 1;
+
     @Override
     public void initGui() {
         super.initGui();
+        currentScaleFactor = new net.minecraft.client.gui.ScaledResolution(mc).getScaleFactor();
         // The root panel always spans the entire screen
         rootPanel = new GuiPanel(0, 0, width, height);
         initComponents();
@@ -97,7 +105,9 @@ public abstract class GuiBaseScreen extends GuiScreen {
         int wheel = Mouse.getEventDWheel();
         if (rootPanel != null) {
             if (wheel != 0) {
-                if (rootPanel.handleMouseScroll(wheel)) return;
+                int mouseX = Mouse.getEventX() * this.width / this.mc.displayWidth;
+                int mouseY = this.height - Mouse.getEventY() * this.height / this.mc.displayHeight - 1;
+                if (rootPanel.handleMouseScroll(mouseX, mouseY, wheel)) return;
             }
             rootPanel.handleMouseInput();
         }

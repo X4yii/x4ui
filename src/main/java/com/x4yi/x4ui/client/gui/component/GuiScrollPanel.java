@@ -70,8 +70,7 @@ public class GuiScrollPanel extends GuiPanel {
         int absX = getAbsoluteX();
         int absY = getAbsoluteY();
         
-        ScaledResolution sr = new ScaledResolution(mc);
-        int scale = sr.getScaleFactor();
+        int scale = com.x4yi.x4ui.client.gui.base.GuiBaseScreen.currentScaleFactor;
         int scissorX = absX * scale;
         int scissorY = mc.displayHeight - (absY + height) * scale;
         int scissorW = width * scale;
@@ -99,9 +98,9 @@ public class GuiScrollPanel extends GuiPanel {
     }
 
     @Override
-    public boolean handleMouseScroll(int wheel) {
-        if (!isMouseOver(mc.mouseHelper.deltaX, mc.mouseHelper.deltaY)) { // Assuming external check or just apply it
-            // We need proper mouse X/Y here, usually passed through an event system or fetched
+    public boolean handleMouseScroll(int mouseX, int mouseY, int wheel) {
+        if (!isMouseOver(mouseX, mouseY)) {
+            return false;
         }
         
         if (wheel != 0) {
@@ -112,6 +111,6 @@ public class GuiScrollPanel extends GuiPanel {
             return true; // Consume event
         }
         
-        return super.handleMouseScroll(wheel);
+        return super.handleMouseScroll(mouseX, mouseY, wheel);
     }
 }

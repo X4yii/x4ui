@@ -1,6 +1,7 @@
 package com.x4yi.x4ui.client.gui.component;
 
 import java.util.function.Consumer;
+import net.minecraft.client.gui.GuiTextField;
 
 public class GuiSlider extends GuiComponent {
     protected String label;
@@ -11,6 +12,7 @@ public class GuiSlider extends GuiComponent {
     
     protected Consumer<Float> onValueChanged;
     protected boolean isDragging = false;
+    protected GuiTextField textField;
     
     // Compatibility fields
     protected int bgColor = 0x333333;
@@ -25,6 +27,17 @@ public class GuiSlider extends GuiComponent {
         this.maxValue = max;
         this.value = current;
         this.onValueChanged = onValueChanged;
+        
+        this.textField = new GuiTextField(0, fontRenderer, 0, 0, 40, 12);
+        this.textField.setMaxStringLength(8);
+        this.textField.setEnableBackgroundDrawing(false);
+        this.textField.setTextColor(0xFFFFFFFF);
+        this.textField.setText(formatValue(this.value));
+    }
+    
+    protected String formatValue(float val) {
+        String valStr = isInt ? String.format("%.0f", val) : String.format("%.1f", val);
+        return valStr.replace(",", ".");
     }
 
     // Secondary constructor for compatibility if they used isInt in newer setups
@@ -38,10 +51,23 @@ public class GuiSlider extends GuiComponent {
     }
 
     public float getValue() { return value; }
-    public void setValue(float value) { this.value = Math.max(minValue, Math.min(maxValue, value)); }
+    public void setValue(float value) { 
+        this.value = Math.max(minValue, Math.min(maxValue, value)); 
+        if (this.textField != null && !this.textField.isFocused()) {
+            this.textField.setText(formatValue(this.value));
+        }
+    }
     
     public String getLabel() { return label; }
     public void setLabel(String label) { this.label = label; }
+
+    @Override
+    public void update() {
+        super.update();
+        if (this.textField != null) {
+            this.textField.updateCursorCounter();
+        }
+    }
 
     @Override
     protected void drawSelf(int mouseX, int mouseY, float partialTicks) {
@@ -50,10 +76,14 @@ public class GuiSlider extends GuiComponent {
         
         int labelColor = (isMouseOver(mouseX, mouseY) && enabled) ? 0xFFFFFFFF : 0xFFB0B0BB;
         
-        String valStr = isInt ? String.format("%.0f", value) : String.format("%.1f", value);
-        valStr = valStr.replace(",", ".");
-        
-        drawString(label + ": " + valStr, absX, absY + (height - 8) / 2, labelColor);
+        int labelW = fontRenderer.getStringWidth(label + ": ");
+        drawString(label + ": ", absX, absY + (height - 8) / 2, labelColor);
+
+        if (this.textField != null) {
+            this.textField.x = absX + labelW;
+            this.textField.y = absY + (height - 8) / 2;
+            this.textField.drawTextBox();
+        }
 
         int sliderW = 70;
         int sliderH = 6;
@@ -74,6 +104,10 @@ public class GuiSlider extends GuiComponent {
 
     @Override
     public boolean mouseClicked(int mouseX, int mouseY, int mouseButton) {
+        boolean clickedText = false;
+        if (this.textField != null) {
+            clickedText = this.textField.mouseClicked(mouseX, mouseY, mouseButton);
+        }
         if (!super.mouseClicked(mouseX, mouseY, mouseButton)) {
             int absX = getAbsoluteX();
             int sliderW = 70;
@@ -85,7 +119,28 @@ public class GuiSlider extends GuiComponent {
                 return true;
             }
         }
-        return false;
+        return clickedText;
+    }
+
+    @Override
+    public boolean keyTyped(char typedChar, int keyCode) {
+        if (this.textField != null && this.textField.isFocused()) {
+            boolean res = this.textField.textboxKeyTyped(typedChar, keyCode);
+            if (res) {
+                try {
+                    float val = Float.parseFloat(this.textField.getText().replace(",", "."));
+                    val = Math.max(minValue, Math.min(maxValue, val));
+                    if (this.value != val) {
+                        this.value = val;
+                        if (onValueChanged != null) {
+                            onValueChanged.accept(this.value);
+                        }
+                    }
+                } catch (NumberFormatException ignored) {}
+            }
+            return res;
+        }
+        return super.keyTyped(typedChar, keyCode);
     }
 
     @Override
@@ -123,6 +178,9 @@ public class GuiSlider extends GuiComponent {
         
         if (this.value != val) {
             this.value = val;
+            if (this.textField != null && !this.textField.isFocused()) {
+                this.textField.setText(formatValue(this.value));
+            }
             if (onValueChanged != null) {
                 onValueChanged.accept(this.value);
             }

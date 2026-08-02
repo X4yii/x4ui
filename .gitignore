@@ -23,3 +23,8 @@ run
 
 # Files from Forge MDK
 forge*changelog.txt
+README.txt
+LICENSE.txt
+LICENSE-Paulscode*.txt
+scratch_*.sh
+docs/

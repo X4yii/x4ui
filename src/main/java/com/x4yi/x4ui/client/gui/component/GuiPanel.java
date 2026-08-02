@@ -21,7 +21,10 @@ public class GuiPanel extends GuiComponent {
     @Override
     public void update() {
         super.update();
-        layoutChildren();
+        if (needsLayout) {
+            needsLayout = false;
+            layoutChildren();
+        }
     }
 
     protected void layoutChildren() {

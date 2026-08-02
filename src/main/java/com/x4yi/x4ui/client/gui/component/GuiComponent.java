@@ -23,6 +23,14 @@ public abstract class GuiComponent {
     
     protected boolean visible = true;
     protected boolean enabled = true;
+    protected boolean needsLayout = true;
+
+    public void markDirty() {
+        this.needsLayout = true;
+        if (parent != null) {
+            parent.markDirty();
+        }
+    }
 
     public GuiComponent(int x, int y, int width, int height) {
         this.x = x;
@@ -34,11 +42,13 @@ public abstract class GuiComponent {
     public void addChild(GuiComponent child) {
         child.setParent(this);
         children.add(child);
+        markDirty();
     }
     
     public void removeChild(GuiComponent child) {
         children.remove(child);
         child.setParent(null);
+        markDirty();
     }
     
     public void clearChildren() {
@@ -46,6 +56,7 @@ public abstract class GuiComponent {
             child.setParent(null);
         }
         children.clear();
+        markDirty();
     }
     
     public List<GuiComponent> getChildren() {
@@ -130,10 +141,10 @@ public abstract class GuiComponent {
         return false;
     }
 
-    public boolean handleMouseScroll(int wheel) {
+    public boolean handleMouseScroll(int mouseX, int mouseY, int wheel) {
         if (!visible || !enabled) return false;
         for (int i = children.size() - 1; i >= 0; i--) {
-            if (children.get(i).handleMouseScroll(wheel)) {
+            if (children.get(i).handleMouseScroll(mouseX, mouseY, wheel)) {
                 return true;
             }
         }
@@ -180,15 +191,15 @@ public abstract class GuiComponent {
     public int getPadding() { return padding; }
     public int getMargin() { return margin; }
 
-    public void setX(int x) { this.x = x; }
-    public void setY(int y) { this.y = y; }
-    public void setWidth(int width) { this.width = width; }
-    public void setHeight(int height) { this.height = height; }
-    public void setPadding(int padding) { this.padding = padding; }
-    public void setMargin(int margin) { this.margin = margin; }
+    public void setX(int x) { if (this.x != x) { this.x = x; markDirty(); } }
+    public void setY(int y) { if (this.y != y) { this.y = y; markDirty(); } }
+    public void setWidth(int width) { if (this.width != width) { this.width = width; markDirty(); } }
+    public void setHeight(int height) { if (this.height != height) { this.height = height; markDirty(); } }
+    public void setPadding(int padding) { if (this.padding != padding) { this.padding = padding; markDirty(); } }
+    public void setMargin(int margin) { if (this.margin != margin) { this.margin = margin; markDirty(); } }
 
     public boolean isVisible() { return visible; }
-    public void setVisible(boolean visible) { this.visible = visible; }
+    public void setVisible(boolean visible) { if (this.visible != visible) { this.visible = visible; markDirty(); } }
     public boolean isEnabled() { return enabled; }
     public void setEnabled(boolean enabled) { this.enabled = enabled; }
     

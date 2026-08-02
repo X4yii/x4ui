@@ -21,7 +21,7 @@ apply plugin: 'net.minecraftforge.gradle.forge'
 apply plugin: 'eclipse'
 apply plugin: 'maven-publish'
 
-version = "1.0.0"
+version = "r1.0b1"
 group = "com.x4yi.x4ui"
 archivesBaseName = "x4ui"
 
