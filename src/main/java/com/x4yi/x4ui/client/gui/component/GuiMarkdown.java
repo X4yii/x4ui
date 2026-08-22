@@ -11,12 +11,14 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 public class GuiMarkdown extends GuiComponent {
     private static final Pattern IMG_PATTERN = Pattern.compile("^!\\[(.*?)\\]\\((.*?)\\)");
+    public java.util.function.Consumer<String> onLinkClicked;
+    private java.util.Map<String, Integer> anchors = new java.util.HashMap<>();
     private String rawText;
-    private int textColor = 0xFFE0E0E6;
+    public int textColor = 0xFFE0E0E6;
+    public int colorH1 = 0xFF00E5FF;
+    public int colorH2 = 0xFF00E676;
+    public int colorH3 = 0xFFFFD600;
     private List<MarkdownNode> nodes = new ArrayList<>();
-    private int colorH1 = 0xFF00E5FF;
-    private int colorH2 = 0xFF00E676;
-    private int colorH3 = 0xFFFFD600;
     private int colorLink = 0xFF29B6F6;
     private int colorCode = 0xFFFFAB40;
     private int colorQuote = 0xFFAAAAAA;
@@ -35,8 +37,12 @@ public class GuiMarkdown extends GuiComponent {
     public String getRawText() {
         return this.rawText;
     }
+    public int getAnchorY(String id) {
+        return anchors.getOrDefault(id, 0);
+    }
     private void parseAndLayout() {
         nodes.clear();
+        anchors.clear();
         this.height = 0;
         if (rawText == null || rawText.isEmpty()) return;
         FontRenderer fr = Minecraft.getMinecraft().fontRenderer;
@@ -66,15 +72,21 @@ public class GuiMarkdown extends GuiComponent {
                 continue;
             }
             if (line.startsWith("### ")) {
-                currentY += addTextNode(fr, line.substring(4), 0, currentY, width, colorH3, true, false, false);
+                String title = line.substring(4);
+                anchors.put(title.toLowerCase().replaceAll("[^a-z0-9]+", "-").replaceAll("^-|-$", ""), currentY);
+                currentY += addTextNode(fr, title, 0, currentY, width, colorH3, true, false, false);
                 currentY += 4; continue;
             }
             if (line.startsWith("## ")) {
-                currentY += addTextNode(fr, line.substring(3), 0, currentY, width, colorH2, true, false, false);
+                String title = line.substring(3);
+                anchors.put(title.toLowerCase().replaceAll("[^a-z0-9]+", "-").replaceAll("^-|-$", ""), currentY);
+                currentY += addTextNode(fr, title, 0, currentY, width, colorH2, true, false, false);
                 currentY += 4; continue;
             }
             if (line.startsWith("# ")) {
-                currentY += addTextNode(fr, line.substring(2), 0, currentY, width, colorH1, true, false, false);
+                String title = line.substring(2);
+                anchors.put(title.toLowerCase().replaceAll("[^a-z0-9]+", "-").replaceAll("^-|-$", ""), currentY);
+                currentY += addTextNode(fr, title, 0, currentY, width, colorH1, true, false, false);
                 currentY += 6; continue;
             }
             if (line.startsWith("> ")) {
@@ -124,7 +136,7 @@ public class GuiMarkdown extends GuiComponent {
                     currX = startX;
                     currY += lineHeight;
                 }
-                tnode.words.add(new RenderWord(currX, currY, formatted, color, seg.isLink));
+                tnode.words.add(new RenderWord(currX, currY, formatted, color, seg.isLink, seg.linkTarget));
                 currX += w;
             }
         }
@@ -139,19 +151,19 @@ public class GuiMarkdown extends GuiComponent {
         while (i < text.length()) {
             char c = text.charAt(i);
             if (c == '`') {
-                flushSegment(result, current, bold, italic, code, link);
+                flushSegment(result, current, bold, italic, code, link, null);
                 code = !code;
                 i++;
             } else if (c == '*' && i + 1 < text.length() && text.charAt(i + 1) == '*') {
-                flushSegment(result, current, bold, italic, code, link);
+                flushSegment(result, current, bold, italic, code, link, null);
                 bold = !bold;
                 i += 2;
             } else if (c == '_' && i + 1 < text.length() && text.charAt(i + 1) == '_') {
-                flushSegment(result, current, bold, italic, code, link);
+                flushSegment(result, current, bold, italic, code, link, null);
                 bold = !bold;
                 i += 2;
             } else if (c == '_' || c == '*') {
-                flushSegment(result, current, bold, italic, code, link);
+                flushSegment(result, current, bold, italic, code, link, null);
                 italic = !italic;
                 i++;
             } else if (c == '[') {
@@ -159,9 +171,10 @@ public class GuiMarkdown extends GuiComponent {
                 if (endBracket != -1 && endBracket + 1 < text.length() && text.charAt(endBracket + 1) == '(') {
                     int endParen = text.indexOf(')', endBracket);
                     if (endParen != -1) {
-                        flushSegment(result, current, bold, italic, code, link);
+                        flushSegment(result, current, bold, italic, code, link, null);
                         String linkText = text.substring(i + 1, endBracket);
-                        result.add(new Segment(linkText, bold, italic, code, true));
+                        String linkUrl = text.substring(endBracket + 2, endParen);
+                        result.add(new Segment(linkText, bold, italic, code, true, linkUrl));
                         i = endParen + 1;
                         continue;
                     }
@@ -173,14 +186,41 @@ public class GuiMarkdown extends GuiComponent {
                 i++;
             }
         }
-        flushSegment(result, current, bold, italic, code, link);
+        flushSegment(result, current, bold, italic, code, link, null);
         return result;
     }
-    private void flushSegment(List<Segment> result, StringBuilder current, boolean b, boolean i, boolean c, boolean l) {
+    private void flushSegment(List<Segment> result, StringBuilder current, boolean b, boolean i, boolean c, boolean l, String target) {
         if (current.length() > 0) {
-            result.add(new Segment(current.toString(), b, i, c, l));
+            result.add(new Segment(current.toString(), b, i, c, l, target));
             current.setLength(0);
         }
+    }
+    @Override
+    public boolean mouseClicked(int mouseX, int mouseY, int mouseButton) {
+        if (super.mouseClicked(mouseX, mouseY, mouseButton)) return true;
+        if (mouseButton == 0) {
+            int absX = getAbsoluteX();
+            int absY = getAbsoluteY();
+            FontRenderer fr = Minecraft.getMinecraft().fontRenderer;
+            for (MarkdownNode node : nodes) {
+                if (node instanceof TextNode) {
+                    for (RenderWord w : ((TextNode) node).words) {
+                        if (w.isLink) {
+                            int sw = fr.getStringWidth(w.text);
+                            int tx = absX + w.x;
+                            int ty = absY + w.y;
+                            if (mouseX >= tx && mouseX <= tx + sw && mouseY >= ty && mouseY <= ty + 10) {
+                                if (onLinkClicked != null && w.linkTarget != null) {
+                                    onLinkClicked.accept(w.linkTarget);
+                                }
+                                return true;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return false;
     }
     @Override
     protected void drawSelf(int mouseX, int mouseY, float partialTicks) {
@@ -194,14 +234,16 @@ public class GuiMarkdown extends GuiComponent {
     private static class Segment {
         String text;
         boolean bold, italic, isCode, isLink;
-        Segment(String t, boolean b, boolean i, boolean c, boolean l) { text = t; bold = b; italic = i; isCode = c; isLink = l; }
+        String linkTarget;
+        Segment(String t, boolean b, boolean i, boolean c, boolean l, String tgt) { text = t; bold = b; italic = i; isCode = c; isLink = l; linkTarget = tgt; }
     }
     private static class RenderWord {
         int x, y;
         String text;
         int color;
         boolean isLink;
-        RenderWord(int x, int y, String text, int color, boolean isLink) { this.x = x; this.y = y; this.text = text; this.color = color; this.isLink = isLink; }
+        String linkTarget;
+        RenderWord(int x, int y, String text, int color, boolean isLink, String tgt) { this.x = x; this.y = y; this.text = text; this.color = color; this.isLink = isLink; this.linkTarget = tgt; }
     }
     private abstract class MarkdownNode {
         abstract void draw(int absX, int absY, FontRenderer fr);

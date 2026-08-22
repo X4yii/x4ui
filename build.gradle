@@ -18,7 +18,7 @@ repositories {
 apply plugin: 'net.minecraftforge.gradle.forge'
 apply plugin: 'eclipse'
 apply plugin: 'maven-publish'
-version = "r1.0b1"
+version = "r1.0b2"
 group = "com.x4yi.x4ui"
 archivesBaseName = "x4ui"
 sourceCompatibility = targetCompatibility = '1.8'
