@@ -21,10 +21,12 @@ public class GuiButton extends GuiComponent {
     @Override
     protected void drawSelf(int mouseX, int mouseY, float partialTicks) {
         boolean hovered = isMouseOver(mouseX, mouseY) && enabled;
+        float dt = com.x4yi.x4ui.client.gui.base.GuiBaseScreen.deltaTime;
+        float speed = 10f * dt;
         if (hovered) {
-            hoverLerp = Math.min(1.0f, hoverLerp + 0.15f);
+            hoverLerp = Math.min(1.0f, hoverLerp + speed);
         } else {
-            hoverLerp = Math.max(0.0f, hoverLerp - 0.15f);
+            hoverLerp = Math.max(0.0f, hoverLerp - speed);
         }
         int currentBg = lerpColor(baseBgColor, hoverBgColor, hoverLerp);
         int currentBorder = lerpColor(baseBorderColor, hoverBorderColor, hoverLerp);

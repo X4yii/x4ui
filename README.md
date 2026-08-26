@@ -19,14 +19,15 @@ Tired of dealing with hardcoded coordinates, messy `drawScreen` overrides, and i
 You should use X4UI if you are building:
 - **Interactive Guidebooks or Manuals:** Need to render formatted text? X4UI includes a native `GuiMarkdown` parser that automatically converts Markdown text into beautiful, structured UI elements (Headers, blockquotes, bullets, and images).
 - **RPG Skill Trees & Complex Menus:** Nested panels, buttons, toggles, and sliders are handled automatically.
-- **Dynamic Inventories / Custom Forges:** `GuiScrollPanel` provides out-of-the-box OpenGL clipping (`GL_SCISSOR_TEST`), allowing you to create smooth, scrollable lists of ingredients without items rendering outside the box.
+- **Dynamic Inventories / Custom Forges:** `GuiScrollPanel` provides out-of-the-box OpenGL clipping (`GL_SCISSOR_TEST`), allowing you to create smooth, scrollable lists of ingredients without items rendering outside the box. Nested scroll panels automatically intersect their scissor boxes using `ScissorHelper`.
 
 ### Key Features
 - **DOM Architecture:** Build your UI by nesting components (`rootPanel.addChild(new GuiButton(...))`).
 - **FlexBox Layouts:** `GuiPanel` supports automatic `VERTICAL` and `HORIZONTAL` stacking with gaps and margins. No more manual math for UI placement!
 - **High Performance (Dirty Flag System):** Layouts are only recalculated when a component physically changes, saving massive amounts of CPU and preventing FPS drops even in screens with hundreds of elements.
 - **Event Bubbling:** Clicks and scroll events accurately respect Z-index. Clicking an overlapping button will trigger the top-most one and stop propagating.
-- **Micro-Animations:** Built-in lerp logic for buttery-smooth hover and click transitions.
+- **Micro-Animations:** Built-in lerp logic for buttery-smooth hover and click transitions. All animations are FPS-independent and scaled by delta-time to ensure the same speed on any hardware.
+- **Memory Safety (LRU Caching):** The `FontWidthCache` system ensures complex text parsing (like Markdown) won't cause memory leaks by limiting cached strings using an automatic LRU eviction policy.
 
 ### Installation (For Developers)
 Add the following to your `build.gradle`:
@@ -37,8 +38,8 @@ repositories {
 }
 
 dependencies {
-    // Replace r1.0b1 with the latest release tag
-    compile 'com.github.X4yi:X4UI:r1.0b1'
+    // Replace r1.0b3 with the latest release tag
+    compile 'com.github.X4yi:X4UI:r1.0b3'
 }
 ```
 
@@ -80,14 +81,15 @@ public class MyCustomScreen extends GuiBaseScreen {
 Deberías considerar usar X4UI si estás creando:
 - **Guías o Manuales Interactivos:** ¿Necesitas renderizar texto con formato? X4UI incluye un analizador nativo `GuiMarkdown` que convierte automáticamente texto en elementos de UI estructurados y hermosos (Encabezados, citas, viñetas e imágenes).
 - **Árboles de Habilidades RPG y Menús Complejos:** Los paneles anidados, botones, interruptores y deslizadores (sliders) se manejan automáticamente.
-- **Inventarios Dinámicos / Forjas Customizadas:** `GuiScrollPanel` proporciona recorte OpenGL nativo (`GL_SCISSOR_TEST`), permitiéndote crear listas de ingredientes desplazables y suaves sin que los ítems se rendericen fuera de la caja.
+- **Inventarios Dinámicos / Forjas Customizadas:** `GuiScrollPanel` proporciona recorte OpenGL nativo (`GL_SCISSOR_TEST`), permitiéndote crear listas de ingredientes desplazables y suaves sin que los ítems se rendericen fuera de la caja. Los paneles anidados calcularán sus áreas de recorte perfectamente gracias a `ScissorHelper`.
 
 ### Características Principales
 - **Arquitectura DOM:** Construye tu interfaz anidando componentes (`rootPanel.addChild(new GuiButton(...))`).
 - **Diseños FlexBox:** `GuiPanel` soporta apilamiento automático `VERTICAL` y `HORIZONTAL` con márgenes y separaciones. ¡Se acabó calcular matemáticas manuales para posicionar interfaces!
 - **Alto Rendimiento (Dirty Flag System):** Los diseños sólo se recalcularán matemáticamente cuando un componente cambia físicamente. Esto ahorra inmensas cantidades de procesamiento y previene caídas de FPS, incluso en menús con cientos de elementos.
 - **Propagación de Eventos:** Los clics y el desplazamiento (scroll) respetan con precisión el índice Z. Hacer clic en un botón superpuesto activará el que esté por encima y detendrá la propagación a los de abajo.
-- **Micro-Animaciones:** Lógica de interpolación (lerp) integrada para transiciones de "hover" (pasar el ratón por encima) y clics extremadamente fluidas.
+- **Micro-Animaciones:** Lógica de interpolación (lerp) integrada para transiciones de "hover" y clics fluidas. Las animaciones son independientes de los FPS (escaladas por DeltaTime) asegurando la misma velocidad visual en cualquier PC.
+- **Seguridad de Memoria (Caché LRU):** El sistema `FontWidthCache` asegura que el análisis de textos complejos (como Markdown) no cause fugas de memoria al limitar las cadenas cacheadas usando una política de limpieza automática LRU.
 
 ### Instalación (Para Desarrolladores)
 Añade lo siguiente a tu `build.gradle`:
@@ -98,8 +100,8 @@ repositories {
 }
 
 dependencies {
-    // Reemplaza r1.0b1 con la versión más reciente
-    compile 'com.github.X4yi:X4UI:r1.0b1'
+    // Reemplaza r1.0b3 con la versión más reciente
+    compile 'com.github.X4yi:X4UI:r1.0b3'
 }
 ```
 

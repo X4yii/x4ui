@@ -1,0 +1,583 @@
+diff --git a/.gitignore b/.gitignore
+index 2717ce8..5ada7e6 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -28,3 +28,8 @@ LICENSE.txt
+ LICENSE-Paulscode*.txt
+ scratch_*.sh
+ docs/
++
++d.md
++INDEX.md
++README_CurseForge.md
++README_Modrinth.md
+diff --git a/README.md b/README.md
+index 046f118..5197fed 100644
+--- a/README.md
++++ b/README.md
+@@ -19,14 +19,15 @@ Tired of dealing with hardcoded coordinates, messy `drawScreen` overrides, and i
+ You should use X4UI if you are building:
+ - **Interactive Guidebooks or Manuals:** Need to render formatted text? X4UI includes a native `GuiMarkdown` parser that automatically converts Markdown text into beautiful, structured UI elements (Headers, blockquotes, bullets, and images).
+ - **RPG Skill Trees & Complex Menus:** Nested panels, buttons, toggles, and sliders are handled automatically.
+-- **Dynamic Inventories / Custom Forges:** `GuiScrollPanel` provides out-of-the-box OpenGL clipping (`GL_SCISSOR_TEST`), allowing you to create smooth, scrollable lists of ingredients without items rendering outside the box.
++- **Dynamic Inventories / Custom Forges:** `GuiScrollPanel` provides out-of-the-box OpenGL clipping (`GL_SCISSOR_TEST`), allowing you to create smooth, scrollable lists of ingredients without items rendering outside the box. Nested scroll panels automatically intersect their scissor boxes using `ScissorHelper`.
+ 
+ ### Key Features
+ - **DOM Architecture:** Build your UI by nesting components (`rootPanel.addChild(new GuiButton(...))`).
+ - **FlexBox Layouts:** `GuiPanel` supports automatic `VERTICAL` and `HORIZONTAL` stacking with gaps and margins. No more manual math for UI placement!
+ - **High Performance (Dirty Flag System):** Layouts are only recalculated when a component physically changes, saving massive amounts of CPU and preventing FPS drops even in screens with hundreds of elements.
+ - **Event Bubbling:** Clicks and scroll events accurately respect Z-index. Clicking an overlapping button will trigger the top-most one and stop propagating.
+-- **Micro-Animations:** Built-in lerp logic for buttery-smooth hover and click transitions.
++- **Micro-Animations:** Built-in lerp logic for buttery-smooth hover and click transitions. All animations are FPS-independent and scaled by delta-time to ensure the same speed on any hardware.
++- **Memory Safety (LRU Caching):** The `FontWidthCache` system ensures complex text parsing (like Markdown) won't cause memory leaks by limiting cached strings using an automatic LRU eviction policy.
+ 
+ ### Installation (For Developers)
+ Add the following to your `build.gradle`:
+@@ -37,8 +38,8 @@ repositories {
+ }
+ 
+ dependencies {
+-    // Replace r1.0b1 with the latest release tag
+-    compile 'com.github.X4yi:X4UI:r1.0b1'
++    // Replace r1.0b3 with the latest release tag
++    compile 'com.github.X4yi:X4UI:r1.0b3'
+ }
+ ```
+ 
+@@ -80,14 +81,15 @@ public class MyCustomScreen extends GuiBaseScreen {
+ Deberías considerar usar X4UI si estás creando:
+ - **Guías o Manuales Interactivos:** ¿Necesitas renderizar texto con formato? X4UI incluye un analizador nativo `GuiMarkdown` que convierte automáticamente texto en elementos de UI estructurados y hermosos (Encabezados, citas, viñetas e imágenes).
+ - **Árboles de Habilidades RPG y Menús Complejos:** Los paneles anidados, botones, interruptores y deslizadores (sliders) se manejan automáticamente.
+-- **Inventarios Dinámicos / Forjas Customizadas:** `GuiScrollPanel` proporciona recorte OpenGL nativo (`GL_SCISSOR_TEST`), permitiéndote crear listas de ingredientes desplazables y suaves sin que los ítems se rendericen fuera de la caja.
++- **Inventarios Dinámicos / Forjas Customizadas:** `GuiScrollPanel` proporciona recorte OpenGL nativo (`GL_SCISSOR_TEST`), permitiéndote crear listas de ingredientes desplazables y suaves sin que los ítems se rendericen fuera de la caja. Los paneles anidados calcularán sus áreas de recorte perfectamente gracias a `ScissorHelper`.
+ 
+ ### Características Principales
+ - **Arquitectura DOM:** Construye tu interfaz anidando componentes (`rootPanel.addChild(new GuiButton(...))`).
+ - **Diseños FlexBox:** `GuiPanel` soporta apilamiento automático `VERTICAL` y `HORIZONTAL` con márgenes y separaciones. ¡Se acabó calcular matemáticas manuales para posicionar interfaces!
+ - **Alto Rendimiento (Dirty Flag System):** Los diseños sólo se recalcularán matemáticamente cuando un componente cambia físicamente. Esto ahorra inmensas cantidades de procesamiento y previene caídas de FPS, incluso en menús con cientos de elementos.
+ - **Propagación de Eventos:** Los clics y el desplazamiento (scroll) respetan con precisión el índice Z. Hacer clic en un botón superpuesto activará el que esté por encima y detendrá la propagación a los de abajo.
+-- **Micro-Animaciones:** Lógica de interpolación (lerp) integrada para transiciones de "hover" (pasar el ratón por encima) y clics extremadamente fluidas.
++- **Micro-Animaciones:** Lógica de interpolación (lerp) integrada para transiciones de "hover" y clics fluidas. Las animaciones son independientes de los FPS (escaladas por DeltaTime) asegurando la misma velocidad visual en cualquier PC.
++- **Seguridad de Memoria (Caché LRU):** El sistema `FontWidthCache` asegura que el análisis de textos complejos (como Markdown) no cause fugas de memoria al limitar las cadenas cacheadas usando una política de limpieza automática LRU.
+ 
+ ### Instalación (Para Desarrolladores)
+ Añade lo siguiente a tu `build.gradle`:
+@@ -98,8 +100,8 @@ repositories {
+ }
+ 
+ dependencies {
+-    // Reemplaza r1.0b1 con la versión más reciente
+-    compile 'com.github.X4yi:X4UI:r1.0b1'
++    // Reemplaza r1.0b3 con la versión más reciente
++    compile 'com.github.X4yi:X4UI:r1.0b3'
+ }
+ ```
+ 
+diff --git a/build.gradle b/build.gradle
+index 8821393..fba0dad 100644
+--- a/build.gradle
++++ b/build.gradle
+@@ -18,7 +18,7 @@ repositories {
+ apply plugin: 'net.minecraftforge.gradle.forge'
+ apply plugin: 'eclipse'
+ apply plugin: 'maven-publish'
+-version = "r1.0b2"
++version = "r1.0b3"
+ group = "com.x4yi.x4ui"
+ archivesBaseName = "x4ui"
+ sourceCompatibility = targetCompatibility = '1.8'
+diff --git a/src/main/java/com/x4yi/x4ui/X4UI.java b/src/main/java/com/x4yi/x4ui/X4UI.java
+index 59be01f..681f1d0 100644
+--- a/src/main/java/com/x4yi/x4ui/X4UI.java
++++ b/src/main/java/com/x4yi/x4ui/X4UI.java
+@@ -7,8 +7,8 @@ import org.apache.logging.log4j.Logger;
+ @Mod(modid = X4UI.MODID, name = X4UI.NAME, version = X4UI.VERSION)
+ public class X4UI {
+     public static final String MODID = "x4ui";
+-    public static final String NAME = "X4yi's UI";
+-    public static final String VERSION = "r1.0b2";
++    public static final String NAME = "X4UI";
++    public static final String VERSION = "r1.0b3";
+     private static Logger logger;
+     @Mod.EventHandler
+     public void preInit(FMLPreInitializationEvent event) {
+diff --git a/src/main/java/com/x4yi/x4ui/client/gui/base/GuiBaseContainer.java b/src/main/java/com/x4yi/x4ui/client/gui/base/GuiBaseContainer.java
+index 96bf0a1..1bcae2c 100644
+--- a/src/main/java/com/x4yi/x4ui/client/gui/base/GuiBaseContainer.java
++++ b/src/main/java/com/x4yi/x4ui/client/gui/base/GuiBaseContainer.java
+@@ -17,9 +17,12 @@ public abstract class GuiBaseContainer extends GuiContainer {
+         super.initGui();
+         GuiBaseScreen.currentScaleFactor = new net.minecraft.client.gui.ScaledResolution(mc).getScaleFactor();
+         rootPanel = new GuiPanel(0, 0, width, height);
++        jeiRecipeAreas.clear();
+         initComponents();
+     }
+     protected abstract void initComponents();
++    public int getGuiLeft() { return this.guiLeft; }
++    public int getGuiTop() { return this.guiTop; }
+     @Override
+     public void drawDefaultBackground() {
+     }
+@@ -40,6 +43,16 @@ public abstract class GuiBaseContainer extends GuiContainer {
+         super.drawScreen(mouseX, mouseY, partialTicks);
+         net.minecraft.client.renderer.GlStateManager.popMatrix();
+         this.renderHoveredToolTip(mouseX, mouseY);
++        if (rootPanel != null) {
++            com.x4yi.x4ui.client.gui.component.GuiComponent hovered = rootPanel.getHoveredComponent(mouseX, mouseY);
++            if (hovered != null && hovered.getTooltipText() != null) {
++                drawHoveringText(java.util.Arrays.asList(hovered.getTooltipText().split("\n")), mouseX, mouseY);
++            }
++        }
++    }
++    protected final java.util.List<java.awt.Rectangle> jeiRecipeAreas = new java.util.ArrayList<>();
++    public java.util.List<java.awt.Rectangle> getJeiRecipeAreas() {
++        return jeiRecipeAreas;
+     }
+     @Override
+     protected void drawGuiContainerBackgroundLayer(float partialTicks, int mouseX, int mouseY) {
+diff --git a/src/main/java/com/x4yi/x4ui/client/gui/base/GuiBaseScreen.java b/src/main/java/com/x4yi/x4ui/client/gui/base/GuiBaseScreen.java
+index c135926..de321aa 100644
+--- a/src/main/java/com/x4yi/x4ui/client/gui/base/GuiBaseScreen.java
++++ b/src/main/java/com/x4yi/x4ui/client/gui/base/GuiBaseScreen.java
+@@ -29,6 +29,9 @@ public abstract class GuiBaseScreen extends GuiScreen {
+         this.title = title;
+     }
+     public static int currentScaleFactor = 1;
++    public static float deltaTime = 0.0f;
++    private long lastRenderTime = 0;
++    
+     @Override
+     public void initGui() {
+         super.initGui();
+@@ -39,11 +42,29 @@ public abstract class GuiBaseScreen extends GuiScreen {
+     protected abstract void initComponents();
+     @Override
+     public void drawScreen(int mouseX, int mouseY, float partialTicks) {
++        long currentTime = System.currentTimeMillis();
++        if (lastRenderTime != 0) {
++            deltaTime = (currentTime - lastRenderTime) / 1000f;
++            if (deltaTime > 0.1f) deltaTime = 0.1f;
++            if (deltaTime < 0) deltaTime = 0;
++        }
++        lastRenderTime = currentTime;
++
+         if (rootPanel != null) {
+             rootPanel.update();
+             rootPanel.drawComponent(mouseX, mouseY, partialTicks);
+         }
+         super.drawScreen(mouseX, mouseY, partialTicks);
++        if (rootPanel != null) {
++            com.x4yi.x4ui.client.gui.component.GuiComponent hovered = rootPanel.getHoveredComponent(mouseX, mouseY);
++            com.x4yi.x4ui.client.gui.component.GuiComponent tooltipSource = hovered;
++            while (tooltipSource != null && tooltipSource.getTooltipText() == null) {
++                tooltipSource = tooltipSource.getParent();
++            }
++            if (tooltipSource != null && tooltipSource.getTooltipText() != null) {
++                drawHoveringText(java.util.Arrays.asList(tooltipSource.getTooltipText().split("\n")), mouseX, mouseY);
++            }
++        }
+     }
+     @Override
+     protected void mouseClicked(int mouseX, int mouseY, int mouseButton) throws IOException {
+@@ -112,4 +133,4 @@ public abstract class GuiBaseScreen extends GuiScreen {
+             rootPanel.removeChild(component);
+         }
+     }
+-}
+\ No newline at end of file
++}
+diff --git a/src/main/java/com/x4yi/x4ui/client/gui/component/GuiButton.java b/src/main/java/com/x4yi/x4ui/client/gui/component/GuiButton.java
+index 2f79913..fff5e26 100644
+--- a/src/main/java/com/x4yi/x4ui/client/gui/component/GuiButton.java
++++ b/src/main/java/com/x4yi/x4ui/client/gui/component/GuiButton.java
+@@ -21,10 +21,12 @@ public class GuiButton extends GuiComponent {
+     @Override
+     protected void drawSelf(int mouseX, int mouseY, float partialTicks) {
+         boolean hovered = isMouseOver(mouseX, mouseY) && enabled;
++        float dt = com.x4yi.x4ui.client.gui.base.GuiBaseScreen.deltaTime;
++        float speed = 10f * dt;
+         if (hovered) {
+-            hoverLerp = Math.min(1.0f, hoverLerp + 0.15f);
++            hoverLerp = Math.min(1.0f, hoverLerp + speed);
+         } else {
+-            hoverLerp = Math.max(0.0f, hoverLerp - 0.15f);
++            hoverLerp = Math.max(0.0f, hoverLerp - speed);
+         }
+         int currentBg = lerpColor(baseBgColor, hoverBgColor, hoverLerp);
+         int currentBorder = lerpColor(baseBorderColor, hoverBorderColor, hoverLerp);
+diff --git a/src/main/java/com/x4yi/x4ui/client/gui/component/GuiComponent.java b/src/main/java/com/x4yi/x4ui/client/gui/component/GuiComponent.java
+index c40cfe9..b3961a9 100644
+--- a/src/main/java/com/x4yi/x4ui/client/gui/component/GuiComponent.java
++++ b/src/main/java/com/x4yi/x4ui/client/gui/component/GuiComponent.java
+@@ -9,6 +9,7 @@ public abstract class GuiComponent {
+     protected final FontRenderer fontRenderer = mc.fontRenderer;
+     protected GuiComponent parent;
+     protected final List<GuiComponent> children = new ArrayList<>();
++    protected final List<GuiComponent> renderChildren = new ArrayList<>();
+     protected int x;
+     protected int y;
+     protected int width;
+@@ -18,8 +19,34 @@ public abstract class GuiComponent {
+     protected boolean visible = true;
+     protected boolean enabled = true;
+     protected boolean needsLayout = true;
++    protected boolean needsRenderSort = true;
++    protected int layer = 0;
++    protected String tooltipText = null;
++    protected static final java.util.Comparator<GuiComponent> LAYER_COMPARATOR = java.util.Comparator.comparingInt(GuiComponent::getLayer);
++    public enum DragConstraint {
++        NONE,
++        PARENT_BOUNDS
++    }
++    protected boolean draggable = false;
++    protected DragConstraint dragConstraint = DragConstraint.NONE;
++    protected boolean isDragging = false;
++    protected int dragOffsetX = 0;
++    protected int dragOffsetY = 0;
++    public GuiComponent setDraggable(boolean draggable) { this.draggable = draggable; return this; }
++    public GuiComponent setDragConstraint(DragConstraint dragConstraint) { this.dragConstraint = dragConstraint; return this; }
++    public String getTooltipText() { return tooltipText; }
++    public void setTooltip(String tooltipText) { this.tooltipText = tooltipText; }
++    public boolean isDraggable() { return draggable; }
++    public int getLayer() { return layer; }
++    public void setLayer(int layer) {
++        if (this.layer != layer) {
++            this.layer = layer;
++            if (parent != null) parent.markDirty();
++        }
++    }
+     public void markDirty() {
+         this.needsLayout = true;
++        this.needsRenderSort = true;
+         if (parent != null) {
+             parent.markDirty();
+         }
+@@ -75,41 +102,76 @@ public abstract class GuiComponent {
+     }
+     protected abstract void drawSelf(int mouseX, int mouseY, float partialTicks);
+     protected void drawChildren(int mouseX, int mouseY, float partialTicks) {
+-        for (GuiComponent child : children) {
++        if (needsRenderSort) {
++            renderChildren.clear();
++            renderChildren.addAll(children);
++            renderChildren.sort(LAYER_COMPARATOR);
++            needsRenderSort = false;
++        }
++        for (GuiComponent child : renderChildren) {
+             child.drawComponent(mouseX, mouseY, partialTicks);
+         }
+     }
+     public boolean mouseClicked(int mouseX, int mouseY, int mouseButton) {
+         if (!visible || !enabled) return false;
+-        for (int i = children.size() - 1; i >= 0; i--) {
+-            if (children.get(i).mouseClicked(mouseX, mouseY, mouseButton)) {
++        for (int i = renderChildren.size() - 1; i >= 0; i--) {
++            if (renderChildren.get(i).mouseClicked(mouseX, mouseY, mouseButton)) {
+                 return true;
+             }
+         }
++        if (draggable && isMouseOver(mouseX, mouseY) && mouseButton == 0) {
++            isDragging = true;
++            dragOffsetX = mouseX - getAbsoluteX();
++            dragOffsetY = mouseY - getAbsoluteY();
++            return true;
++        }
+         return false;
+     }
+     public boolean mouseReleased(int mouseX, int mouseY, int state) {
+         if (!visible || !enabled) return false;
+-        for (int i = children.size() - 1; i >= 0; i--) {
+-            if (children.get(i).mouseReleased(mouseX, mouseY, state)) {
++        for (int i = renderChildren.size() - 1; i >= 0; i--) {
++            if (renderChildren.get(i).mouseReleased(mouseX, mouseY, state)) {
+                 return true;
+             }
+         }
++        if (isDragging) {
++            isDragging = false;
++            return true;
++        }
+         return false;
+     }
+     public boolean mouseClickMove(int mouseX, int mouseY, int clickedMouseButton, long timeSinceLastClick) {
+         if (!visible || !enabled) return false;
+-        for (int i = children.size() - 1; i >= 0; i--) {
+-            if (children.get(i).mouseClickMove(mouseX, mouseY, clickedMouseButton, timeSinceLastClick)) {
++        for (int i = renderChildren.size() - 1; i >= 0; i--) {
++            if (renderChildren.get(i).mouseClickMove(mouseX, mouseY, clickedMouseButton, timeSinceLastClick)) {
+                 return true;
+             }
+         }
++        if (isDragging) {
++            int newAbsX = mouseX - dragOffsetX;
++            int newAbsY = mouseY - dragOffsetY;
++            if (dragConstraint == DragConstraint.PARENT_BOUNDS && parent != null) {
++                int pX = parent.getAbsoluteX() + parent.getPadding();
++                int pY = parent.getAbsoluteY() + parent.getPadding();
++                int pW = parent.getWidth() - parent.getPadding() * 2;
++                int pH = parent.getHeight() - parent.getPadding() * 2;
++                if (newAbsX < pX) newAbsX = pX;
++                if (newAbsY < pY) newAbsY = pY;
++                if (newAbsX + width > pX + pW) newAbsX = pX + pW - width;
++                if (newAbsY + height > pY + pH) newAbsY = pY + pH - height;
++            }
++            int newX = parent != null ? newAbsX - parent.getAbsoluteX() : newAbsX;
++            int newY = parent != null ? newAbsY - parent.getAbsoluteY() : newAbsY;
++            setX(newX);
++            setY(newY);
++            return true;
++        }
+         return false;
+     }
+     public boolean keyTyped(char typedChar, int keyCode) {
+         if (!visible || !enabled) return false;
+-        for (int i = children.size() - 1; i >= 0; i--) {
+-            if (children.get(i).keyTyped(typedChar, keyCode)) {
++        for (int i = renderChildren.size() - 1; i >= 0; i--) {
++            if (renderChildren.get(i).keyTyped(typedChar, keyCode)) {
+                 return true;
+             }
+         }
+@@ -117,8 +179,8 @@ public abstract class GuiComponent {
+     }
+     public boolean handleMouseScroll(int mouseX, int mouseY, int wheel) {
+         if (!visible || !enabled) return false;
+-        for (int i = children.size() - 1; i >= 0; i--) {
+-            if (children.get(i).handleMouseScroll(mouseX, mouseY, wheel)) {
++        for (int i = renderChildren.size() - 1; i >= 0; i--) {
++            if (renderChildren.get(i).handleMouseScroll(mouseX, mouseY, wheel)) {
+                 return true;
+             }
+         }
+@@ -129,6 +191,17 @@ public abstract class GuiComponent {
+             child.handleMouseInput();
+         }
+     }
++    public GuiComponent getHoveredComponent(int mouseX, int mouseY) {
++        if (!visible || !isMouseOver(mouseX, mouseY)) return null;
++        for (int i = renderChildren.size() - 1; i >= 0; i--) {
++            GuiComponent hovered = renderChildren.get(i).getHoveredComponent(mouseX, mouseY);
++            if (hovered != null) return hovered;
++        }
++        if (tooltipText != null) {
++            return this;
++        }
++        return null;
++    }
+     protected boolean isMouseOver(int mouseX, int mouseY) {
+         int absX = getAbsoluteX();
+         int absY = getAbsoluteY();
+diff --git a/src/main/java/com/x4yi/x4ui/client/gui/component/GuiMarkdown.java b/src/main/java/com/x4yi/x4ui/client/gui/component/GuiMarkdown.java
+index aa379c7..d98e6fb 100644
+--- a/src/main/java/com/x4yi/x4ui/client/gui/component/GuiMarkdown.java
++++ b/src/main/java/com/x4yi/x4ui/client/gui/component/GuiMarkdown.java
+@@ -131,8 +131,8 @@ public class GuiMarkdown extends GuiComponent {
+                 if (seg.isLink) color = colorLink;
+                 if (seg.isCode) color = colorCode;
+                 String formatted = mcFormat + token;
+-                int w = fr.getStringWidth(formatted);
+-                if (!token.trim().isEmpty() && currX + w > startX + maxW) {
++                int w = com.x4yi.x4ui.client.gui.utils.FontWidthCache.getStringWidth(fr, formatted, "x4ui");
++                if (!token.trim().isEmpty() && maxW > 0 && currX + w > startX + maxW) {
+                     currX = startX;
+                     currY += lineHeight;
+                 }
+@@ -206,7 +206,7 @@ public class GuiMarkdown extends GuiComponent {
+                 if (node instanceof TextNode) {
+                     for (RenderWord w : ((TextNode) node).words) {
+                         if (w.isLink) {
+-                            int sw = fr.getStringWidth(w.text);
++                            int sw = com.x4yi.x4ui.client.gui.utils.FontWidthCache.getStringWidth(fr, w.text, "x4ui");
+                             int tx = absX + w.x;
+                             int ty = absY + w.y;
+                             if (mouseX >= tx && mouseX <= tx + sw && mouseY >= ty && mouseY <= ty + 10) {
+@@ -255,7 +255,7 @@ public class GuiMarkdown extends GuiComponent {
+             for (RenderWord w : words) {
+                 fr.drawString(w.text, absX + w.x, absY + w.y, w.color);
+                 if (w.isLink) {
+-                    int sw = fr.getStringWidth(w.text);
++                    int sw = com.x4yi.x4ui.client.gui.utils.FontWidthCache.getStringWidth(fr, w.text, "x4ui");
+                     Gui.drawRect(absX + w.x, absY + w.y + 9, absX + w.x + sw, absY + w.y + 10, w.color);
+                 }
+             }
+diff --git a/src/main/java/com/x4yi/x4ui/client/gui/component/GuiPanel.java b/src/main/java/com/x4yi/x4ui/client/gui/component/GuiPanel.java
+index cdf59ce..3ebc8e8 100644
+--- a/src/main/java/com/x4yi/x4ui/client/gui/component/GuiPanel.java
++++ b/src/main/java/com/x4yi/x4ui/client/gui/component/GuiPanel.java
+@@ -3,15 +3,22 @@ import com.x4yi.x4ui.client.gui.component.layout.FlexDirection;
+ public class GuiPanel extends GuiComponent {
+     protected FlexDirection flexDirection = FlexDirection.ABSOLUTE;
+     protected int gap = 0;
++    protected boolean flexWrap = false;
+     public GuiPanel(int x, int y, int width, int height) {
+         super(x, y, width, height);
+     }
+     public void setFlexDirection(FlexDirection flexDirection) {
+         this.flexDirection = flexDirection;
+     }
++    public FlexDirection getFlexDirection() {
++        return this.flexDirection;
++    }
+     public void setGap(int gap) {
+         this.gap = gap;
+     }
++    public void setFlexWrap(boolean flexWrap) {
++        this.flexWrap = flexWrap;
++    }
+     @Override
+     public void update() {
+         super.update();
+@@ -22,24 +29,46 @@ public class GuiPanel extends GuiComponent {
+     }
+     protected void layoutChildren() {
+         if (flexDirection == FlexDirection.ABSOLUTE) return;
++        int oldWidth = this.width;
++        int oldHeight = this.height;
+         int currentX = padding;
+         int currentY = padding;
++        int maxLineSize = 0;
+         for (GuiComponent child : children) {
+-            if (!child.isVisible()) continue;
+-            if (flexDirection == FlexDirection.VERTICAL) {
++            if (!child.isVisible() || child.isDraggable()) continue;
++            if (flexDirection == FlexDirection.HORIZONTAL) {
++                int childW = child.getWidth() + child.getMargin() * 2;
++                if (flexWrap && currentX + childW > this.width - padding) {
++                    currentX = padding;
++                    currentY += maxLineSize + gap;
++                    maxLineSize = 0;
++                }
+                 child.setX(currentX + child.getMargin());
+                 child.setY(currentY + child.getMargin());
+-                currentY += child.getHeight() + child.getMargin() * 2 + gap;
+-            } else if (flexDirection == FlexDirection.HORIZONTAL) {
++                currentX += childW + gap;
++                maxLineSize = Math.max(maxLineSize, child.getHeight() + child.getMargin() * 2);
++            } else if (flexDirection == FlexDirection.VERTICAL) {
++                int childH = child.getHeight() + child.getMargin() * 2;
++                if (flexWrap && currentY + childH > this.height - padding) {
++                    currentY = padding;
++                    currentX += maxLineSize + gap;
++                    maxLineSize = 0;
++                }
+                 child.setX(currentX + child.getMargin());
+                 child.setY(currentY + child.getMargin());
+-                currentX += child.getWidth() + child.getMargin() * 2 + gap;
++                currentY += childH + gap;
++                maxLineSize = Math.max(maxLineSize, child.getWidth() + child.getMargin() * 2);
+             }
+         }
+         if (flexDirection == FlexDirection.VERTICAL) {
+-            this.height = currentY + padding;
++            if (!flexWrap) this.height = currentY + padding;
++            else this.width = currentX + maxLineSize + padding;
+         } else if (flexDirection == FlexDirection.HORIZONTAL) {
+-            this.width = currentX + padding;
++            if (!flexWrap) this.width = currentX + padding;
++            else this.height = currentY + maxLineSize + padding;
++        }
++        if ((oldWidth != this.width || oldHeight != this.height) && parent != null) {
++            parent.markDirty();
+         }
+     }
+     @Override
+diff --git a/src/main/java/com/x4yi/x4ui/client/gui/component/GuiScrollPanel.java b/src/main/java/com/x4yi/x4ui/client/gui/component/GuiScrollPanel.java
+index 9016992..cec67f1 100644
+--- a/src/main/java/com/x4yi/x4ui/client/gui/component/GuiScrollPanel.java
++++ b/src/main/java/com/x4yi/x4ui/client/gui/component/GuiScrollPanel.java
+@@ -11,7 +11,36 @@ public class GuiScrollPanel extends GuiPanel {
+     public GuiScrollPanel(int x, int y, int width, int height) {
+         super(x, y, width, height);
+         this.flexDirection = com.x4yi.x4ui.client.gui.component.layout.FlexDirection.ABSOLUTE;
+-        contentPanel = new GuiPanel(0, 0, width, height);
++        contentPanel = new GuiPanel(0, 0, width, height) {
++            @Override
++            protected void drawChildren(int mouseX, int mouseY, float partialTicks) {
++                int scrollViewY = (int) scrollY;
++                int viewHeight = GuiScrollPanel.this.height;
++                for (GuiComponent child : children) {
++                    int childBottom = child.getY() + child.getHeight() + child.getMargin();
++                    int childTop = child.getY() - child.getMargin();
++                    if (childBottom > 0 && childTop < viewHeight) {
++                        child.drawComponent(mouseX, mouseY, partialTicks);
++                    }
++                }
++            }
++            @Override
++            public boolean mouseClicked(int mouseX, int mouseY, int mouseButton) {
++                if (!visible || !enabled) return false;
++                int viewHeight = GuiScrollPanel.this.height;
++                for (int i = children.size() - 1; i >= 0; i--) {
++                    GuiComponent child = children.get(i);
++                    int childBottom = child.getY() + child.getHeight() + child.getMargin();
++                    int childTop = child.getY() - child.getMargin();
++                    if (childBottom > 0 && childTop < viewHeight) {
++                        if (child.mouseClicked(mouseX, mouseY, mouseButton)) {
++                            return true;
++                        }
++                    }
++                }
++                return false;
++            }
++        };
+         contentPanel.setFlexDirection(com.x4yi.x4ui.client.gui.component.layout.FlexDirection.VERTICAL);
+         super.addChild(contentPanel);
+     }
+@@ -40,7 +69,8 @@ public class GuiScrollPanel extends GuiPanel {
+         maxScrollY = Math.max(0, contentPanel.getHeight() - this.height);
+         if (targetScrollY > maxScrollY) targetScrollY = maxScrollY;
+         if (targetScrollY < 0) targetScrollY = 0;
+-        scrollY += (targetScrollY - scrollY) * scrollSpeed;
++        float dt = com.x4yi.x4ui.client.gui.base.GuiBaseScreen.deltaTime;
++        scrollY += (targetScrollY - scrollY) * (scrollSpeed * 60f * dt);
+         if (Math.abs(targetScrollY - scrollY) < 0.5f) {
+             scrollY = targetScrollY;
+         }
+@@ -55,10 +85,9 @@ public class GuiScrollPanel extends GuiPanel {
+         int scissorY = mc.displayHeight - (absY + height) * scale;
+         int scissorW = width * scale;
+         int scissorH = height * scale;
+-        GL11.glEnable(GL11.GL_SCISSOR_TEST);
+-        GL11.glScissor(scissorX, scissorY, scissorW, scissorH);
++        com.x4yi.x4ui.client.gui.utils.ScissorHelper.pushScissor(scissorX, scissorY, scissorW, scissorH);
+         super.drawChildren(mouseX, mouseY, partialTicks);
+-        GL11.glDisable(GL11.GL_SCISSOR_TEST);
++        com.x4yi.x4ui.client.gui.utils.ScissorHelper.popScissor();
+         if (maxScrollY > 0) {
+             int trackX = absX + width - 5;
+             int trackY = absY;
+@@ -75,13 +104,16 @@ public class GuiScrollPanel extends GuiPanel {
+         if (!isMouseOver(mouseX, mouseY)) {
+             return false;
+         }
+-        if (wheel != 0) {
++        if (super.handleMouseScroll(mouseX, mouseY, wheel)) {
++            return true;
++        }
++        if (wheel != 0 && maxScrollY > 0) {
+             int direction = wheel > 0 ? -1 : 1;
+             targetScrollY += direction * scrollStep;
+             if (targetScrollY < 0) targetScrollY = 0;
+             if (targetScrollY > maxScrollY) targetScrollY = maxScrollY;
+             return true;
+         }
+-        return super.handleMouseScroll(mouseX, mouseY, wheel);
++        return false;
+     }
+ }
+\ No newline at end of file
+diff --git a/src/main/java/com/x4yi/x4ui/client/gui/component/GuiToggle.java b/src/main/java/com/x4yi/x4ui/client/gui/component/GuiToggle.java
+index 2f69928..b4bbe47 100644
+--- a/src/main/java/com/x4yi/x4ui/client/gui/component/GuiToggle.java
++++ b/src/main/java/com/x4yi/x4ui/client/gui/component/GuiToggle.java
+@@ -24,7 +24,9 @@ public class GuiToggle extends GuiComponent {
+         int absX = getAbsoluteX();
+         int absY = getAbsoluteY();
+         float target = state ? 1.0f : 0.0f;
+-        animationLerp += (target - animationLerp) * 0.2f;
++        float dt = com.x4yi.x4ui.client.gui.base.GuiBaseScreen.deltaTime;
++        float speed = 15f * dt;
++        animationLerp += (target - animationLerp) * speed;
+         if (Math.abs(target - animationLerp) < 0.01f) {
+             animationLerp = target;
+         }

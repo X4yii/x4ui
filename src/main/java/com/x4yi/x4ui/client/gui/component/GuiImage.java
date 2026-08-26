@@ -1,0 +1,51 @@
+package com.x4yi.x4ui.client.gui.component;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.GlStateManager;
+import net.minecraft.client.renderer.ThreadDownloadImageData;
+import net.minecraft.client.renderer.texture.ITextureObject;
+import net.minecraft.util.ResourceLocation;
+import java.io.File;
+public class GuiImage extends GuiComponent {
+    private ResourceLocation texture;
+    private String url;
+    private float u1 = 0, v1 = 0, u2 = 1, v2 = 1;
+    public GuiImage(int x, int y, int width, int height) {
+        super(x, y, width, height);
+    }
+    public GuiImage setResource(ResourceLocation location) {
+        this.texture = location;
+        this.url = null;
+        return this;
+    }
+    public GuiImage setUrl(String url) {
+        this.url = url;
+        String sanitizedUrl = url.replaceAll("[^a-zA-Z0-9]", "_");
+        this.texture = new ResourceLocation("x4ui", "downloaded_images/" + sanitizedUrl);
+        ITextureObject existing = mc.getTextureManager().getTexture(texture);
+        if (existing == null) {
+            File cacheDir = new File(Minecraft.getMinecraft().mcDataDir, "x4ui_cache");
+            if (!cacheDir.exists()) cacheDir.mkdirs();
+            File cacheFile = new File(cacheDir, sanitizedUrl + ".png");
+            ThreadDownloadImageData image = new ThreadDownloadImageData(cacheFile, url, null, null);
+            mc.getTextureManager().loadTexture(texture, image);
+        }
+        return this;
+    }
+    public GuiImage setUV(float u1, float v1, float u2, float v2) {
+        this.u1 = u1;
+        this.v1 = v1;
+        this.u2 = u2;
+        this.v2 = v2;
+        return this;
+    }
+    @Override
+    protected void drawSelf(int mouseX, int mouseY, float partialTicks) {
+        if (texture != null) {
+            mc.getTextureManager().bindTexture(texture);
+            GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
+            GuiSprite.drawTexturedRect(getAbsoluteX(), getAbsoluteY(), width, height, u1, v1, u2, v2);
+        } else {
+            net.minecraft.client.gui.Gui.drawRect(getAbsoluteX(), getAbsoluteY(), getAbsoluteX() + width, getAbsoluteY() + height, 0x88000000);
+        }
+    }
+}

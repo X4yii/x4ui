@@ -9,6 +9,7 @@ public abstract class GuiComponent {
     protected final FontRenderer fontRenderer = mc.fontRenderer;
     protected GuiComponent parent;
     protected final List<GuiComponent> children = new ArrayList<>();
+    protected final List<GuiComponent> renderChildren = new ArrayList<>();
     protected int x;
     protected int y;
     protected int width;
@@ -18,8 +19,34 @@ public abstract class GuiComponent {
     protected boolean visible = true;
     protected boolean enabled = true;
     protected boolean needsLayout = true;
+    protected boolean needsRenderSort = true;
+    protected int layer = 0;
+    protected String tooltipText = null;
+    protected static final java.util.Comparator<GuiComponent> LAYER_COMPARATOR = java.util.Comparator.comparingInt(GuiComponent::getLayer);
+    public enum DragConstraint {
+        NONE,
+        PARENT_BOUNDS
+    }
+    protected boolean draggable = false;
+    protected DragConstraint dragConstraint = DragConstraint.NONE;
+    protected boolean isDragging = false;
+    protected int dragOffsetX = 0;
+    protected int dragOffsetY = 0;
+    public GuiComponent setDraggable(boolean draggable) { this.draggable = draggable; return this; }
+    public GuiComponent setDragConstraint(DragConstraint dragConstraint) { this.dragConstraint = dragConstraint; return this; }
+    public String getTooltipText() { return tooltipText; }
+    public void setTooltip(String tooltipText) { this.tooltipText = tooltipText; }
+    public boolean isDraggable() { return draggable; }
+    public int getLayer() { return layer; }
+    public void setLayer(int layer) {
+        if (this.layer != layer) {
+            this.layer = layer;
+            if (parent != null) parent.markDirty();
+        }
+    }
     public void markDirty() {
         this.needsLayout = true;
+        this.needsRenderSort = true;
         if (parent != null) {
             parent.markDirty();
         }
@@ -75,41 +102,76 @@ public abstract class GuiComponent {
     }
     protected abstract void drawSelf(int mouseX, int mouseY, float partialTicks);
     protected void drawChildren(int mouseX, int mouseY, float partialTicks) {
-        for (GuiComponent child : children) {
+        if (needsRenderSort) {
+            renderChildren.clear();
+            renderChildren.addAll(children);
+            renderChildren.sort(LAYER_COMPARATOR);
+            needsRenderSort = false;
+        }
+        for (GuiComponent child : renderChildren) {
             child.drawComponent(mouseX, mouseY, partialTicks);
         }
     }
     public boolean mouseClicked(int mouseX, int mouseY, int mouseButton) {
         if (!visible || !enabled) return false;
-        for (int i = children.size() - 1; i >= 0; i--) {
-            if (children.get(i).mouseClicked(mouseX, mouseY, mouseButton)) {
+        for (int i = renderChildren.size() - 1; i >= 0; i--) {
+            if (renderChildren.get(i).mouseClicked(mouseX, mouseY, mouseButton)) {
                 return true;
             }
+        }
+        if (draggable && isMouseOver(mouseX, mouseY) && mouseButton == 0) {
+            isDragging = true;
+            dragOffsetX = mouseX - getAbsoluteX();
+            dragOffsetY = mouseY - getAbsoluteY();
+            return true;
         }
         return false;
     }
     public boolean mouseReleased(int mouseX, int mouseY, int state) {
         if (!visible || !enabled) return false;
-        for (int i = children.size() - 1; i >= 0; i--) {
-            if (children.get(i).mouseReleased(mouseX, mouseY, state)) {
+        for (int i = renderChildren.size() - 1; i >= 0; i--) {
+            if (renderChildren.get(i).mouseReleased(mouseX, mouseY, state)) {
                 return true;
             }
+        }
+        if (isDragging) {
+            isDragging = false;
+            return true;
         }
         return false;
     }
     public boolean mouseClickMove(int mouseX, int mouseY, int clickedMouseButton, long timeSinceLastClick) {
         if (!visible || !enabled) return false;
-        for (int i = children.size() - 1; i >= 0; i--) {
-            if (children.get(i).mouseClickMove(mouseX, mouseY, clickedMouseButton, timeSinceLastClick)) {
+        for (int i = renderChildren.size() - 1; i >= 0; i--) {
+            if (renderChildren.get(i).mouseClickMove(mouseX, mouseY, clickedMouseButton, timeSinceLastClick)) {
                 return true;
             }
+        }
+        if (isDragging) {
+            int newAbsX = mouseX - dragOffsetX;
+            int newAbsY = mouseY - dragOffsetY;
+            if (dragConstraint == DragConstraint.PARENT_BOUNDS && parent != null) {
+                int pX = parent.getAbsoluteX() + parent.getPadding();
+                int pY = parent.getAbsoluteY() + parent.getPadding();
+                int pW = parent.getWidth() - parent.getPadding() * 2;
+                int pH = parent.getHeight() - parent.getPadding() * 2;
+                if (newAbsX < pX) newAbsX = pX;
+                if (newAbsY < pY) newAbsY = pY;
+                if (newAbsX + width > pX + pW) newAbsX = pX + pW - width;
+                if (newAbsY + height > pY + pH) newAbsY = pY + pH - height;
+            }
+            int newX = parent != null ? newAbsX - parent.getAbsoluteX() : newAbsX;
+            int newY = parent != null ? newAbsY - parent.getAbsoluteY() : newAbsY;
+            setX(newX);
+            setY(newY);
+            return true;
         }
         return false;
     }
     public boolean keyTyped(char typedChar, int keyCode) {
         if (!visible || !enabled) return false;
-        for (int i = children.size() - 1; i >= 0; i--) {
-            if (children.get(i).keyTyped(typedChar, keyCode)) {
+        for (int i = renderChildren.size() - 1; i >= 0; i--) {
+            if (renderChildren.get(i).keyTyped(typedChar, keyCode)) {
                 return true;
             }
         }
@@ -117,8 +179,8 @@ public abstract class GuiComponent {
     }
     public boolean handleMouseScroll(int mouseX, int mouseY, int wheel) {
         if (!visible || !enabled) return false;
-        for (int i = children.size() - 1; i >= 0; i--) {
-            if (children.get(i).handleMouseScroll(mouseX, mouseY, wheel)) {
+        for (int i = renderChildren.size() - 1; i >= 0; i--) {
+            if (renderChildren.get(i).handleMouseScroll(mouseX, mouseY, wheel)) {
                 return true;
             }
         }
@@ -128,6 +190,17 @@ public abstract class GuiComponent {
         for (GuiComponent child : children) {
             child.handleMouseInput();
         }
+    }
+    public GuiComponent getHoveredComponent(int mouseX, int mouseY) {
+        if (!visible || !isMouseOver(mouseX, mouseY)) return null;
+        for (int i = renderChildren.size() - 1; i >= 0; i--) {
+            GuiComponent hovered = renderChildren.get(i).getHoveredComponent(mouseX, mouseY);
+            if (hovered != null) return hovered;
+        }
+        if (tooltipText != null) {
+            return this;
+        }
+        return null;
     }
     protected boolean isMouseOver(int mouseX, int mouseY) {
         int absX = getAbsoluteX();

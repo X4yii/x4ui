@@ -131,8 +131,8 @@ public class GuiMarkdown extends GuiComponent {
                 if (seg.isLink) color = colorLink;
                 if (seg.isCode) color = colorCode;
                 String formatted = mcFormat + token;
-                int w = fr.getStringWidth(formatted);
-                if (!token.trim().isEmpty() && currX + w > startX + maxW) {
+                int w = com.x4yi.x4ui.client.gui.utils.FontWidthCache.getStringWidth(fr, formatted, "x4ui");
+                if (!token.trim().isEmpty() && maxW > 0 && currX + w > startX + maxW) {
                     currX = startX;
                     currY += lineHeight;
                 }
@@ -206,7 +206,7 @@ public class GuiMarkdown extends GuiComponent {
                 if (node instanceof TextNode) {
                     for (RenderWord w : ((TextNode) node).words) {
                         if (w.isLink) {
-                            int sw = fr.getStringWidth(w.text);
+                            int sw = com.x4yi.x4ui.client.gui.utils.FontWidthCache.getStringWidth(fr, w.text, "x4ui");
                             int tx = absX + w.x;
                             int ty = absY + w.y;
                             if (mouseX >= tx && mouseX <= tx + sw && mouseY >= ty && mouseY <= ty + 10) {
@@ -255,7 +255,7 @@ public class GuiMarkdown extends GuiComponent {
             for (RenderWord w : words) {
                 fr.drawString(w.text, absX + w.x, absY + w.y, w.color);
                 if (w.isLink) {
-                    int sw = fr.getStringWidth(w.text);
+                    int sw = com.x4yi.x4ui.client.gui.utils.FontWidthCache.getStringWidth(fr, w.text, "x4ui");
                     Gui.drawRect(absX + w.x, absY + w.y + 9, absX + w.x + sw, absY + w.y + 10, w.color);
                 }
             }

@@ -7,8 +7,8 @@ import org.apache.logging.log4j.Logger;
 @Mod(modid = X4UI.MODID, name = X4UI.NAME, version = X4UI.VERSION)
 public class X4UI {
     public static final String MODID = "x4ui";
-    public static final String NAME = "X4yi's UI";
-    public static final String VERSION = "r1.0b2";
+    public static final String NAME = "X4UI";
+    public static final String VERSION = "r1.0b3";
     private static Logger logger;
     @Mod.EventHandler
     public void preInit(FMLPreInitializationEvent event) {

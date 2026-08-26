@@ -11,7 +11,36 @@ public class GuiScrollPanel extends GuiPanel {
     public GuiScrollPanel(int x, int y, int width, int height) {
         super(x, y, width, height);
         this.flexDirection = com.x4yi.x4ui.client.gui.component.layout.FlexDirection.ABSOLUTE;
-        contentPanel = new GuiPanel(0, 0, width, height);
+        contentPanel = new GuiPanel(0, 0, width, height) {
+            @Override
+            protected void drawChildren(int mouseX, int mouseY, float partialTicks) {
+                int scrollViewY = (int) scrollY;
+                int viewHeight = GuiScrollPanel.this.height;
+                for (GuiComponent child : children) {
+                    int childBottom = child.getY() + child.getHeight() + child.getMargin();
+                    int childTop = child.getY() - child.getMargin();
+                    if (childBottom > 0 && childTop < viewHeight) {
+                        child.drawComponent(mouseX, mouseY, partialTicks);
+                    }
+                }
+            }
+            @Override
+            public boolean mouseClicked(int mouseX, int mouseY, int mouseButton) {
+                if (!visible || !enabled) return false;
+                int viewHeight = GuiScrollPanel.this.height;
+                for (int i = children.size() - 1; i >= 0; i--) {
+                    GuiComponent child = children.get(i);
+                    int childBottom = child.getY() + child.getHeight() + child.getMargin();
+                    int childTop = child.getY() - child.getMargin();
+                    if (childBottom > 0 && childTop < viewHeight) {
+                        if (child.mouseClicked(mouseX, mouseY, mouseButton)) {
+                            return true;
+                        }
+                    }
+                }
+                return false;
+            }
+        };
         contentPanel.setFlexDirection(com.x4yi.x4ui.client.gui.component.layout.FlexDirection.VERTICAL);
         super.addChild(contentPanel);
     }
@@ -40,7 +69,8 @@ public class GuiScrollPanel extends GuiPanel {
         maxScrollY = Math.max(0, contentPanel.getHeight() - this.height);
         if (targetScrollY > maxScrollY) targetScrollY = maxScrollY;
         if (targetScrollY < 0) targetScrollY = 0;
-        scrollY += (targetScrollY - scrollY) * scrollSpeed;
+        float dt = com.x4yi.x4ui.client.gui.base.GuiBaseScreen.deltaTime;
+        scrollY += (targetScrollY - scrollY) * (scrollSpeed * 60f * dt);
         if (Math.abs(targetScrollY - scrollY) < 0.5f) {
             scrollY = targetScrollY;
         }
@@ -55,10 +85,9 @@ public class GuiScrollPanel extends GuiPanel {
         int scissorY = mc.displayHeight - (absY + height) * scale;
         int scissorW = width * scale;
         int scissorH = height * scale;
-        GL11.glEnable(GL11.GL_SCISSOR_TEST);
-        GL11.glScissor(scissorX, scissorY, scissorW, scissorH);
+        com.x4yi.x4ui.client.gui.utils.ScissorHelper.pushScissor(scissorX, scissorY, scissorW, scissorH);
         super.drawChildren(mouseX, mouseY, partialTicks);
-        GL11.glDisable(GL11.GL_SCISSOR_TEST);
+        com.x4yi.x4ui.client.gui.utils.ScissorHelper.popScissor();
         if (maxScrollY > 0) {
             int trackX = absX + width - 5;
             int trackY = absY;
@@ -75,13 +104,16 @@ public class GuiScrollPanel extends GuiPanel {
         if (!isMouseOver(mouseX, mouseY)) {
             return false;
         }
-        if (wheel != 0) {
+        if (super.handleMouseScroll(mouseX, mouseY, wheel)) {
+            return true;
+        }
+        if (wheel != 0 && maxScrollY > 0) {
             int direction = wheel > 0 ? -1 : 1;
             targetScrollY += direction * scrollStep;
             if (targetScrollY < 0) targetScrollY = 0;
             if (targetScrollY > maxScrollY) targetScrollY = maxScrollY;
             return true;
         }
-        return super.handleMouseScroll(mouseX, mouseY, wheel);
+        return false;
     }
 }

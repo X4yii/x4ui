@@ -17,9 +17,12 @@ public abstract class GuiBaseContainer extends GuiContainer {
         super.initGui();
         GuiBaseScreen.currentScaleFactor = new net.minecraft.client.gui.ScaledResolution(mc).getScaleFactor();
         rootPanel = new GuiPanel(0, 0, width, height);
+        jeiRecipeAreas.clear();
         initComponents();
     }
     protected abstract void initComponents();
+    public int getGuiLeft() { return this.guiLeft; }
+    public int getGuiTop() { return this.guiTop; }
     @Override
     public void drawDefaultBackground() {
     }
@@ -40,6 +43,16 @@ public abstract class GuiBaseContainer extends GuiContainer {
         super.drawScreen(mouseX, mouseY, partialTicks);
         net.minecraft.client.renderer.GlStateManager.popMatrix();
         this.renderHoveredToolTip(mouseX, mouseY);
+        if (rootPanel != null) {
+            com.x4yi.x4ui.client.gui.component.GuiComponent hovered = rootPanel.getHoveredComponent(mouseX, mouseY);
+            if (hovered != null && hovered.getTooltipText() != null) {
+                drawHoveringText(java.util.Arrays.asList(hovered.getTooltipText().split("\n")), mouseX, mouseY);
+            }
+        }
+    }
+    protected final java.util.List<java.awt.Rectangle> jeiRecipeAreas = new java.util.ArrayList<>();
+    public java.util.List<java.awt.Rectangle> getJeiRecipeAreas() {
+        return jeiRecipeAreas;
     }
     @Override
     protected void drawGuiContainerBackgroundLayer(float partialTicks, int mouseX, int mouseY) {

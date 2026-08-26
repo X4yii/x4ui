@@ -29,6 +29,9 @@ public abstract class GuiBaseScreen extends GuiScreen {
         this.title = title;
     }
     public static int currentScaleFactor = 1;
+    public static float deltaTime = 0.0f;
+    private long lastRenderTime = 0;
+    
     @Override
     public void initGui() {
         super.initGui();
@@ -39,11 +42,29 @@ public abstract class GuiBaseScreen extends GuiScreen {
     protected abstract void initComponents();
     @Override
     public void drawScreen(int mouseX, int mouseY, float partialTicks) {
+        long currentTime = System.currentTimeMillis();
+        if (lastRenderTime != 0) {
+            deltaTime = (currentTime - lastRenderTime) / 1000f;
+            if (deltaTime > 0.1f) deltaTime = 0.1f;
+            if (deltaTime < 0) deltaTime = 0;
+        }
+        lastRenderTime = currentTime;
+
         if (rootPanel != null) {
             rootPanel.update();
             rootPanel.drawComponent(mouseX, mouseY, partialTicks);
         }
         super.drawScreen(mouseX, mouseY, partialTicks);
+        if (rootPanel != null) {
+            com.x4yi.x4ui.client.gui.component.GuiComponent hovered = rootPanel.getHoveredComponent(mouseX, mouseY);
+            com.x4yi.x4ui.client.gui.component.GuiComponent tooltipSource = hovered;
+            while (tooltipSource != null && tooltipSource.getTooltipText() == null) {
+                tooltipSource = tooltipSource.getParent();
+            }
+            if (tooltipSource != null && tooltipSource.getTooltipText() != null) {
+                drawHoveringText(java.util.Arrays.asList(tooltipSource.getTooltipText().split("\n")), mouseX, mouseY);
+            }
+        }
     }
     @Override
     protected void mouseClicked(int mouseX, int mouseY, int mouseButton) throws IOException {

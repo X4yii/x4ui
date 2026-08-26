@@ -24,7 +24,9 @@ public class GuiToggle extends GuiComponent {
         int absX = getAbsoluteX();
         int absY = getAbsoluteY();
         float target = state ? 1.0f : 0.0f;
-        animationLerp += (target - animationLerp) * 0.2f;
+        float dt = com.x4yi.x4ui.client.gui.base.GuiBaseScreen.deltaTime;
+        float speed = 15f * dt;
+        animationLerp += (target - animationLerp) * speed;
         if (Math.abs(target - animationLerp) < 0.01f) {
             animationLerp = target;
         }
