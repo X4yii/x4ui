@@ -19,7 +19,6 @@ Tired of dealing with hardcoded coordinates, messy `drawScreen` overrides, and i
 You should use X4UI if you are building:
 - **Interactive Guidebooks or Manuals:** Need to render formatted text? X4UI includes a native `GuiMarkdown` parser that automatically converts Markdown text into beautiful, structured UI elements (Headers, blockquotes, bullets, and images).
 - **RPG Skill Trees & Complex Menus:** Nested panels, buttons, toggles, and sliders are handled automatically.
-- **Dynamic Inventories / Custom Forges:** `GuiScrollPanel` provides out-of-the-box OpenGL clipping (`GL_SCISSOR_TEST`), allowing you to create smooth, scrollable lists of ingredients without items rendering outside the box. Nested scroll panels automatically intersect their scissor boxes using `ScissorHelper`.
 
 ### Key Features
 - **DOM Architecture:** Build your UI by nesting components (`rootPanel.addChild(new GuiButton(...))`).
@@ -81,7 +80,6 @@ public class MyCustomScreen extends GuiBaseScreen {
 Deberías considerar usar X4UI si estás creando:
 - **Guías o Manuales Interactivos:** ¿Necesitas renderizar texto con formato? X4UI incluye un analizador nativo `GuiMarkdown` que convierte automáticamente texto en elementos de UI estructurados y hermosos (Encabezados, citas, viñetas e imágenes).
 - **Árboles de Habilidades RPG y Menús Complejos:** Los paneles anidados, botones, interruptores y deslizadores (sliders) se manejan automáticamente.
-- **Inventarios Dinámicos / Forjas Customizadas:** `GuiScrollPanel` proporciona recorte OpenGL nativo (`GL_SCISSOR_TEST`), permitiéndote crear listas de ingredientes desplazables y suaves sin que los ítems se rendericen fuera de la caja. Los paneles anidados calcularán sus áreas de recorte perfectamente gracias a `ScissorHelper`.
 
 ### Características Principales
 - **Arquitectura DOM:** Construye tu interfaz anidando componentes (`rootPanel.addChild(new GuiButton(...))`).

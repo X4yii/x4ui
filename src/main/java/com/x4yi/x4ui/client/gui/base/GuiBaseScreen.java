@@ -31,7 +31,6 @@ public abstract class GuiBaseScreen extends GuiScreen {
     public static int currentScaleFactor = 1;
     public static float deltaTime = 0.0f;
     private long lastRenderTime = 0;
-    
     @Override
     public void initGui() {
         super.initGui();
@@ -49,7 +48,6 @@ public abstract class GuiBaseScreen extends GuiScreen {
             if (deltaTime < 0) deltaTime = 0;
         }
         lastRenderTime = currentTime;
-
         if (rootPanel != null) {
             rootPanel.update();
             rootPanel.drawComponent(mouseX, mouseY, partialTicks);

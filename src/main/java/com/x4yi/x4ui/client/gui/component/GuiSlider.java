@@ -79,12 +79,18 @@ public class GuiSlider extends GuiComponent {
     }
     @Override
     public boolean mouseClicked(int mouseX, int mouseY, int mouseButton) {
+        int absX = getAbsoluteX();
+        int absY = getAbsoluteY();
+        int labelW = fontRenderer.getStringWidth(label + ": ");
+        if (this.textField != null) {
+            this.textField.x = absX + labelW;
+            this.textField.y = absY + (height - 8) / 2;
+        }
         boolean clickedText = false;
         if (this.textField != null) {
             clickedText = this.textField.mouseClicked(mouseX, mouseY, mouseButton);
         }
         if (!super.mouseClicked(mouseX, mouseY, mouseButton)) {
-            int absX = getAbsoluteX();
             int sliderW = 70;
             int sliderX = absX + width - sliderW;
             if (isMouseOver(mouseX, mouseY) && mouseX >= sliderX && enabled && mouseButton == 0) {
