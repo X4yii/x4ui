@@ -14,6 +14,8 @@ public class GuiSlider extends GuiComponent {
     protected int sliderBgColor = 0x666666;
     protected int hoverSliderBgColor = 0x888888;
     protected int textColor = 0xFFFFFF;
+    
+    private static GuiTextField activeTextField = null;
     public GuiSlider(int x, int y, int width, int height, String label, float min, float max, float current, Consumer<Float> onValueChanged) {
         super(x, y, width, height);
         this.label = label;
@@ -89,6 +91,14 @@ public class GuiSlider extends GuiComponent {
         boolean clickedText = false;
         if (this.textField != null) {
             clickedText = this.textField.mouseClicked(mouseX, mouseY, mouseButton);
+            if (this.textField.isFocused()) {
+                if (activeTextField != null && activeTextField != this.textField) {
+                    activeTextField.setFocused(false);
+                }
+                activeTextField = this.textField;
+            } else if (activeTextField == this.textField) {
+                activeTextField = null;
+            }
         }
         if (!super.mouseClicked(mouseX, mouseY, mouseButton)) {
             int sliderW = 70;
@@ -96,6 +106,10 @@ public class GuiSlider extends GuiComponent {
             if (isMouseOver(mouseX, mouseY) && mouseX >= sliderX && enabled && mouseButton == 0) {
                 isDragging = true;
                 updateDrag(mouseX);
+                if (activeTextField != null && activeTextField != this.textField) {
+                    activeTextField.setFocused(false);
+                    activeTextField = null;
+                }
                 return true;
             }
         }
@@ -117,7 +131,7 @@ public class GuiSlider extends GuiComponent {
                     }
                 } catch (NumberFormatException ignored) {}
             }
-            return res;
+            return true;
         }
         return super.keyTyped(typedChar, keyCode);
     }

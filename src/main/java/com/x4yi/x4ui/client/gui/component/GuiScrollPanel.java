@@ -14,9 +14,15 @@ public class GuiScrollPanel extends GuiPanel {
         contentPanel = new GuiPanel(0, 0, width, height) {
             @Override
             protected void drawChildren(int mouseX, int mouseY, float partialTicks) {
+                if (needsRenderSort) {
+                    renderChildren.clear();
+                    renderChildren.addAll(children);
+                    renderChildren.sort(LAYER_COMPARATOR);
+                    needsRenderSort = false;
+                }
                 int scrollViewY = (int) scrollY;
                 int viewHeight = GuiScrollPanel.this.height;
-                for (GuiComponent child : children) {
+                for (GuiComponent child : renderChildren) {
                     int childBottom = child.getY() + child.getHeight() + child.getMargin();
                     int childTop = child.getY() - child.getMargin();
                     if (childBottom > 0 && childTop < viewHeight) {
@@ -28,8 +34,8 @@ public class GuiScrollPanel extends GuiPanel {
             public boolean mouseClicked(int mouseX, int mouseY, int mouseButton) {
                 if (!visible || !enabled) return false;
                 int viewHeight = GuiScrollPanel.this.height;
-                for (int i = children.size() - 1; i >= 0; i--) {
-                    GuiComponent child = children.get(i);
+                for (int i = renderChildren.size() - 1; i >= 0; i--) {
+                    GuiComponent child = renderChildren.get(i);
                     int childBottom = child.getY() + child.getHeight() + child.getMargin();
                     int childTop = child.getY() - child.getMargin();
                     if (childBottom > 0 && childTop < viewHeight) {
