@@ -63,7 +63,11 @@ public class MediaService implements IMediaService {
 
                     @Override
                     public IVideoDecoder createDecoder() {
-                        return new DirectMemoryVideoDecoder();
+                        if (MediaManager.isFFmpegAvailable()) {
+                            return new DirectMemoryVideoDecoder();
+                        } else {
+                            return new com.x4yi.x4ui.impl.client.media.backend.jcodec.JCodecVideoDecoder();
+                        }
                     }
                 };
                 
