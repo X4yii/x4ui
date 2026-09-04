@@ -1,5 +1,5 @@
 package com.x4yi.x4ui.client.gui.component;
-import com.x4yi.x4ui.client.gui.utils.State;
+import com.x4yi.x4ui.common.State;
 import net.minecraft.client.renderer.GlStateManager;
 import org.lwjgl.opengl.GL11;
 import java.util.List;
@@ -24,7 +24,7 @@ public class GuiDropdown<T> extends GuiComponent {
         this.options = new ArrayList<>(options);
     }
     @Override
-    protected void drawSelf(int mouseX, int mouseY, float partialTicks) {
+    protected void renderSelf(int mouseX, int mouseY, float partialTicks) {
         int absX = getAbsoluteX();
         int absY = getAbsoluteY();
         drawRect(absX, absY, absX + width, absY + height, bgColor);
@@ -34,8 +34,8 @@ public class GuiDropdown<T> extends GuiComponent {
         drawString(open ? "▲" : "▼", absX + width - 12, absY + (height - fontRenderer.FONT_HEIGHT) / 2, textColor);
     }
     @Override
-    protected void drawChildren(int mouseX, int mouseY, float partialTicks) {
-        super.drawChildren(mouseX, mouseY, partialTicks);
+    protected void renderChildren(int mouseX, int mouseY, float partialTicks) {
+        super.renderChildren(mouseX, mouseY, partialTicks);
         if (open && !options.isEmpty()) {
             drawPopup(mouseX, mouseY);
         }
@@ -65,7 +65,7 @@ public class GuiDropdown<T> extends GuiComponent {
         }
     }
     @Override
-    public boolean mouseClicked(int mouseX, int mouseY, int mouseButton) {
+    public boolean onMouseClick(int mouseX, int mouseY, int mouseButton) {
         if (!enabled) return false;
         int absX = getAbsoluteX();
         int absY = getAbsoluteY();
@@ -87,6 +87,6 @@ public class GuiDropdown<T> extends GuiComponent {
             open = !open;
             return true;
         }
-        return super.mouseClicked(mouseX, mouseY, mouseButton);
+        return super.onMouseClick(mouseX, mouseY, mouseButton);
     }
 }

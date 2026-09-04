@@ -10,10 +10,10 @@ public class GuiScrollPanel extends GuiPanel {
     protected GuiPanel contentPanel;
     public GuiScrollPanel(int x, int y, int width, int height) {
         super(x, y, width, height);
-        this.flexDirection = com.x4yi.x4ui.client.gui.component.layout.FlexDirection.ABSOLUTE;
+        this.setFlexDirection(com.x4yi.x4ui.client.gui.component.layout.FlexDirection.ABSOLUTE);
         contentPanel = new GuiPanel(0, 0, width, height) {
             @Override
-            protected void drawChildren(int mouseX, int mouseY, float partialTicks) {
+            protected void renderChildren(int mouseX, int mouseY, float partialTicks) {
                 if (needsRenderSort) {
                     renderChildren.clear();
                     renderChildren.addAll(children);
@@ -23,23 +23,24 @@ public class GuiScrollPanel extends GuiPanel {
                 int scrollViewY = (int) scrollY;
                 int viewHeight = GuiScrollPanel.this.height;
                 for (GuiComponent child : renderChildren) {
-                    int childBottom = child.getY() + child.getHeight() + child.getMargin();
-                    int childTop = child.getY() - child.getMargin();
+                    int childBottom = child.getY() - scrollViewY + child.getHeight() + child.getMargin().bottom;
+                    int childTop = child.getY() - scrollViewY - child.getMargin().top;
                     if (childBottom > 0 && childTop < viewHeight) {
-                        child.drawComponent(mouseX, mouseY, partialTicks);
+                        child.render(mouseX, mouseY, partialTicks);
                     }
                 }
             }
             @Override
-            public boolean mouseClicked(int mouseX, int mouseY, int mouseButton) {
+            public boolean onMouseClick(int mouseX, int mouseY, int mouseButton) {
                 if (!visible || !enabled) return false;
                 int viewHeight = GuiScrollPanel.this.height;
+                int scrollViewY = (int) scrollY;
                 for (int i = renderChildren.size() - 1; i >= 0; i--) {
                     GuiComponent child = renderChildren.get(i);
-                    int childBottom = child.getY() + child.getHeight() + child.getMargin();
-                    int childTop = child.getY() - child.getMargin();
+                    int childBottom = child.getY() - scrollViewY + child.getHeight() + child.getMargin().bottom;
+                    int childTop = child.getY() - scrollViewY - child.getMargin().top;
                     if (childBottom > 0 && childTop < viewHeight) {
-                        if (child.mouseClicked(mouseX, mouseY, mouseButton)) {
+                        if (child.onMouseClick(mouseX, mouseY, mouseButton)) {
                             return true;
                         }
                     }
@@ -57,6 +58,8 @@ public class GuiScrollPanel extends GuiPanel {
     public void setScrollY(float y) { this.scrollY = y; }
     public float getTargetScrollY() { return targetScrollY; }
     public void setTargetScrollY(float y) { this.targetScrollY = y; }
+    public int getMaxScrollY() { return maxScrollY; }
+    public void scrollToBottom() { this.targetScrollY = this.maxScrollY; }
     @Override
     public void addChild(GuiComponent child) {
         contentPanel.addChild(child);
@@ -70,8 +73,8 @@ public class GuiScrollPanel extends GuiPanel {
         contentPanel.clearChildren();
     }
     @Override
-    public void update() {
-        super.update();
+    public void tick(float deltaTime) {
+        super.tick(deltaTime);
         maxScrollY = Math.max(0, contentPanel.getHeight() - this.height);
         if (targetScrollY > maxScrollY) targetScrollY = maxScrollY;
         if (targetScrollY < 0) targetScrollY = 0;
@@ -83,7 +86,7 @@ public class GuiScrollPanel extends GuiPanel {
         contentPanel.setY(-(int)scrollY);
     }
     @Override
-    protected void drawChildren(int mouseX, int mouseY, float partialTicks) {
+    protected void renderChildren(int mouseX, int mouseY, float partialTicks) {
         int absX = getAbsoluteX();
         int absY = getAbsoluteY();
         int scale = com.x4yi.x4ui.client.gui.base.GuiBaseScreen.currentScaleFactor;
@@ -92,25 +95,26 @@ public class GuiScrollPanel extends GuiPanel {
         int scissorW = width * scale;
         int scissorH = height * scale;
         com.x4yi.x4ui.client.gui.utils.ScissorHelper.pushScissor(scissorX, scissorY, scissorW, scissorH);
-        super.drawChildren(mouseX, mouseY, partialTicks);
+        super.renderChildren(mouseX, mouseY, partialTicks);
         com.x4yi.x4ui.client.gui.utils.ScissorHelper.popScissor();
         if (maxScrollY > 0) {
+            com.x4yi.x4ui.client.gui.utils.ITheme theme = getTheme();
             int trackX = absX + width - 5;
             int trackY = absY;
             int trackHeight = height;
-            drawRect(trackX, trackY, trackX + 2, trackY + trackHeight, 0xFF121215);
+            drawRect(trackX, trackY, trackX + 2, trackY + trackHeight, theme.getScrollbarTrackColor());
             float scrollRatio = scrollY / maxScrollY;
             int thumbHeight = Math.max(20, (int) ((float) height / contentPanel.getHeight() * trackHeight));
             int thumbY = trackY + (int) (scrollRatio * (trackHeight - thumbHeight));
-            drawRect(trackX, thumbY, trackX + 2, thumbY + thumbHeight, 0xFF424248);
+            drawRect(trackX, thumbY, trackX + 2, thumbY + thumbHeight, theme.getScrollbarThumbColor());
         }
     }
     @Override
-    public boolean handleMouseScroll(int mouseX, int mouseY, int wheel) {
+    public boolean onMouseScroll(int mouseX, int mouseY, int wheel) {
         if (!isMouseOver(mouseX, mouseY)) {
             return false;
         }
-        if (super.handleMouseScroll(mouseX, mouseY, wheel)) {
+        if (super.onMouseScroll(mouseX, mouseY, wheel)) {
             return true;
         }
         if (wheel != 0 && maxScrollY > 0) {

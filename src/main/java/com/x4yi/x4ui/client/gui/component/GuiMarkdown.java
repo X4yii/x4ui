@@ -196,8 +196,8 @@ public class GuiMarkdown extends GuiComponent {
         }
     }
     @Override
-    public boolean mouseClicked(int mouseX, int mouseY, int mouseButton) {
-        if (super.mouseClicked(mouseX, mouseY, mouseButton)) return true;
+    public boolean onMouseClick(int mouseX, int mouseY, int mouseButton) {
+        if (super.onMouseClick(mouseX, mouseY, mouseButton)) return true;
         if (mouseButton == 0) {
             int absX = getAbsoluteX();
             int absY = getAbsoluteY();
@@ -223,7 +223,7 @@ public class GuiMarkdown extends GuiComponent {
         return false;
     }
     @Override
-    protected void drawSelf(int mouseX, int mouseY, float partialTicks) {
+    protected void renderSelf(int mouseX, int mouseY, float partialTicks) {
         int absX = getAbsoluteX();
         int absY = getAbsoluteY();
         FontRenderer fr = Minecraft.getMinecraft().fontRenderer;

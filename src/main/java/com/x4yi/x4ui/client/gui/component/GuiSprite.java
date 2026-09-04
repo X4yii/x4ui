@@ -20,7 +20,7 @@ public class GuiSprite extends GuiComponent {
         return this;
     }
     @Override
-    protected void drawSelf(int mouseX, int mouseY, float partialTicks) {
+    protected void renderSelf(int mouseX, int mouseY, float partialTicks) {
         if (texture == null) return;
         mc.getTextureManager().bindTexture(texture);
         GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);

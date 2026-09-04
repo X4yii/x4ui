@@ -9,8 +9,20 @@ public class GuiImage extends GuiComponent {
     private ResourceLocation texture;
     private String url;
     private float u1 = 0, v1 = 0, u2 = 1, v2 = 1;
+    private float alpha = 1.0F;
+    private float r = 1.0F, g = 1.0F, b = 1.0F;
     public GuiImage(int x, int y, int width, int height) {
         super(x, y, width, height);
+    }
+    public GuiImage setAlpha(float alpha) {
+        this.alpha = alpha;
+        return this;
+    }
+    public GuiImage setColor(float r, float g, float b) {
+        this.r = r;
+        this.g = g;
+        this.b = b;
+        return this;
     }
     public GuiImage setResource(ResourceLocation location) {
         this.texture = location;
@@ -39,10 +51,10 @@ public class GuiImage extends GuiComponent {
         return this;
     }
     @Override
-    protected void drawSelf(int mouseX, int mouseY, float partialTicks) {
+    protected void renderSelf(int mouseX, int mouseY, float partialTicks) {
         if (texture != null) {
             mc.getTextureManager().bindTexture(texture);
-            GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
+            GlStateManager.color(r, g, b, alpha);
             GuiSprite.drawTexturedRect(getAbsoluteX(), getAbsoluteY(), width, height, u1, v1, u2, v2);
         } else {
             net.minecraft.client.gui.Gui.drawRect(getAbsoluteX(), getAbsoluteY(), getAbsoluteX() + width, getAbsoluteY() + height, 0x88000000);

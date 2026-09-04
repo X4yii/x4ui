@@ -19,7 +19,7 @@ public class GuiLabel extends GuiComponent {
         this.width = mc.fontRenderer.getStringWidth(text);
     }
     @Override
-    protected void drawSelf(int mouseX, int mouseY, float partialTicks) {
+    protected void renderSelf(int mouseX, int mouseY, float partialTicks) {
         int absX = getAbsoluteX();
         int absY = getAbsoluteY();
         if (centered) {

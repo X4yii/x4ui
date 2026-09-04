@@ -20,7 +20,7 @@ public class GuiToggle extends GuiComponent {
     public String getLabel() { return label; }
     public void setLabel(String label) { this.label = label; }
     @Override
-    protected void drawSelf(int mouseX, int mouseY, float partialTicks) {
+    protected void renderSelf(int mouseX, int mouseY, float partialTicks) {
         int absX = getAbsoluteX();
         int absY = getAbsoluteY();
         float target = state ? 1.0f : 0.0f;
@@ -45,8 +45,8 @@ public class GuiToggle extends GuiComponent {
         drawCenteredString(text, badgeX + badgeW / 2, badgeY + 2, tColor);
     }
     @Override
-    public boolean mouseClicked(int mouseX, int mouseY, int mouseButton) {
-        if (!super.mouseClicked(mouseX, mouseY, mouseButton)) {
+    public boolean onMouseClick(int mouseX, int mouseY, int mouseButton) {
+        if (!super.onMouseClick(mouseX, mouseY, mouseButton)) {
             if (isMouseOver(mouseX, mouseY) && enabled && mouseButton == 0) {
                 mc.getSoundHandler().playSound(
                     net.minecraft.client.audio.PositionedSoundRecord.getMasterRecord(

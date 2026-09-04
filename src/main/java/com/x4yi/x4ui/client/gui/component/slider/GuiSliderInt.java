@@ -1,5 +1,5 @@
 package com.x4yi.x4ui.client.gui.component.slider;
-import com.x4yi.x4ui.client.gui.utils.State;
+import com.x4yi.x4ui.common.State;
 public class GuiSliderInt extends GuiSlider<Integer> {
     public GuiSliderInt(int x, int y, int width, int height, State<Integer> state, Integer min, Integer max, Integer step) {
         super(x, y, width, height, state, min, max, step);

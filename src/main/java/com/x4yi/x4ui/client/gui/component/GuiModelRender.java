@@ -64,7 +64,7 @@ public class GuiModelRender extends GuiComponent {
         return this;
     }
     @Override
-    protected void drawSelf(int mouseX, int mouseY, float partialTicks) {
+    protected void renderSelf(int mouseX, int mouseY, float partialTicks) {
         int centerX = getAbsoluteX() + width / 2;
         int centerY = getAbsoluteY() + height / 2;
         GlStateManager.pushMatrix();
@@ -136,8 +136,8 @@ public class GuiModelRender extends GuiComponent {
         GlStateManager.popMatrix();
     }
     @Override
-    public boolean mouseClicked(int mouseX, int mouseY, int mouseButton) {
-        if (super.mouseClicked(mouseX, mouseY, mouseButton)) return true;
+    public boolean onMouseClick(int mouseX, int mouseY, int mouseButton) {
+        if (super.onMouseClick(mouseX, mouseY, mouseButton)) return true;
         if (allowDragRotation && isMouseOver(mouseX, mouseY) && mouseButton == 0) {
             dragging = true;
             lastMouseX = mouseX;
@@ -147,8 +147,8 @@ public class GuiModelRender extends GuiComponent {
         return false;
     }
     @Override
-    public boolean mouseClickMove(int mouseX, int mouseY, int clickedMouseButton, long timeSinceLastClick) {
-        if (super.mouseClickMove(mouseX, mouseY, clickedMouseButton, timeSinceLastClick)) return true;
+    public boolean onMouseDrag(int mouseX, int mouseY, int clickedMouseButton, long timeSinceLastClick) {
+        if (super.onMouseDrag(mouseX, mouseY, clickedMouseButton, timeSinceLastClick)) return true;
         if (dragging && allowDragRotation) {
             int dx = mouseX - lastMouseX;
             int dy = mouseY - lastMouseY;
@@ -161,8 +161,8 @@ public class GuiModelRender extends GuiComponent {
         return false;
     }
     @Override
-    public boolean mouseReleased(int mouseX, int mouseY, int state) {
-        if (super.mouseReleased(mouseX, mouseY, state)) return true;
+    public boolean onMouseRelease(int mouseX, int mouseY, int state) {
+        if (super.onMouseRelease(mouseX, mouseY, state)) return true;
         if (dragging) {
             dragging = false;
             return true;

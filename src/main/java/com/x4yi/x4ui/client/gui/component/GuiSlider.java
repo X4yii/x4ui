@@ -14,7 +14,6 @@ public class GuiSlider extends GuiComponent {
     protected int sliderBgColor = 0x666666;
     protected int hoverSliderBgColor = 0x888888;
     protected int textColor = 0xFFFFFF;
-    
     private static GuiTextField activeTextField = null;
     public GuiSlider(int x, int y, int width, int height, String label, float min, float max, float current, Consumer<Float> onValueChanged) {
         super(x, y, width, height);
@@ -50,14 +49,14 @@ public class GuiSlider extends GuiComponent {
     public String getLabel() { return label; }
     public void setLabel(String label) { this.label = label; }
     @Override
-    public void update() {
-        super.update();
+    public void tick(float deltaTime) {
+        super.tick(deltaTime);
         if (this.textField != null) {
             this.textField.updateCursorCounter();
         }
     }
     @Override
-    protected void drawSelf(int mouseX, int mouseY, float partialTicks) {
+    protected void renderSelf(int mouseX, int mouseY, float partialTicks) {
         int absX = getAbsoluteX();
         int absY = getAbsoluteY();
         int labelColor = (isMouseOver(mouseX, mouseY) && enabled) ? 0xFFFFFFFF : 0xFFB0B0BB;
@@ -80,7 +79,7 @@ public class GuiSlider extends GuiComponent {
         drawRect(sliderX + fillWidth - 1, sliderY - 2, sliderX + fillWidth + 1, sliderY + sliderH + 2, 0xFFFFFFFF);
     }
     @Override
-    public boolean mouseClicked(int mouseX, int mouseY, int mouseButton) {
+    public boolean onMouseClick(int mouseX, int mouseY, int mouseButton) {
         int absX = getAbsoluteX();
         int absY = getAbsoluteY();
         int labelW = fontRenderer.getStringWidth(label + ": ");
@@ -100,7 +99,7 @@ public class GuiSlider extends GuiComponent {
                 activeTextField = null;
             }
         }
-        if (!super.mouseClicked(mouseX, mouseY, mouseButton)) {
+        if (!super.onMouseClick(mouseX, mouseY, mouseButton)) {
             int sliderW = 70;
             int sliderX = absX + width - sliderW;
             if (isMouseOver(mouseX, mouseY) && mouseX >= sliderX && enabled && mouseButton == 0) {
@@ -116,7 +115,7 @@ public class GuiSlider extends GuiComponent {
         return clickedText;
     }
     @Override
-    public boolean keyTyped(char typedChar, int keyCode) {
+    public boolean onKeyPress(char typedChar, int keyCode) {
         if (this.textField != null && this.textField.isFocused()) {
             boolean res = this.textField.textboxKeyTyped(typedChar, keyCode);
             if (res) {
@@ -133,23 +132,23 @@ public class GuiSlider extends GuiComponent {
             }
             return true;
         }
-        return super.keyTyped(typedChar, keyCode);
+        return super.onKeyPress(typedChar, keyCode);
     }
     @Override
-    public boolean mouseClickMove(int mouseX, int mouseY, int clickedMouseButton, long timeSinceLastClick) {
+    public boolean onMouseDrag(int mouseX, int mouseY, int clickedMouseButton, long timeSinceLastClick) {
         if (isDragging) {
             updateDrag(mouseX);
             return true;
         }
-        return super.mouseClickMove(mouseX, mouseY, clickedMouseButton, timeSinceLastClick);
+        return super.onMouseDrag(mouseX, mouseY, clickedMouseButton, timeSinceLastClick);
     }
     @Override
-    public boolean mouseReleased(int mouseX, int mouseY, int state) {
+    public boolean onMouseRelease(int mouseX, int mouseY, int state) {
         if (isDragging) {
             isDragging = false;
             return true;
         }
-        return super.mouseReleased(mouseX, mouseY, state);
+        return super.onMouseRelease(mouseX, mouseY, state);
     }
     protected void updateDrag(int mouseX) {
         int absX = getAbsoluteX();

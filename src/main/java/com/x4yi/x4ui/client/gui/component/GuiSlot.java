@@ -10,8 +10,8 @@ public class GuiSlot extends GuiComponent {
         this.containerScreen = containerScreen;
     }
     @Override
-    public void update() {
-        super.update();
+    public void tick(float deltaTime) {
+        super.tick(deltaTime);
         if (slot != null && containerScreen != null) {
             int absX = getAbsoluteX();
             int absY = getAbsoluteY();
@@ -20,7 +20,7 @@ public class GuiSlot extends GuiComponent {
         }
     }
     @Override
-    protected void drawSelf(int mouseX, int mouseY, float partialTicks) {
+    protected void renderSelf(int mouseX, int mouseY, float partialTicks) {
         int absX = getAbsoluteX();
         int absY = getAbsoluteY();
         drawRect(absX, absY, absX + width, absY + height, 0x55000000);

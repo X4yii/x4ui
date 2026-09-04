@@ -10,47 +10,93 @@ public abstract class GuiComponent {
     protected GuiComponent parent;
     protected final List<GuiComponent> children = new ArrayList<>();
     protected final List<GuiComponent> renderChildren = new ArrayList<>();
+    private final List<Runnable> unbinders = new ArrayList<>();
     protected int x;
     protected int y;
     protected int width;
     protected int height;
-    protected int padding = 0;
-    protected int margin = 0;
+    protected com.x4yi.x4ui.client.gui.utils.Insets padding = com.x4yi.x4ui.client.gui.utils.Insets.ZERO;
+    protected com.x4yi.x4ui.client.gui.utils.Insets margin = com.x4yi.x4ui.client.gui.utils.Insets.ZERO;
     protected boolean visible = true;
     protected boolean enabled = true;
     protected boolean needsLayout = true;
     protected boolean needsRenderSort = true;
     protected int layer = 0;
     protected String tooltipText = null;
+    protected GuiComponent tooltipComponent = null;
+    protected com.x4yi.x4ui.client.gui.component.layout.ILayoutManager layoutManager = null;
+    protected com.x4yi.x4ui.client.gui.utils.ITheme theme = null;
+
     protected static final java.util.Comparator<GuiComponent> LAYER_COMPARATOR = java.util.Comparator.comparingInt(GuiComponent::getLayer);
-    public enum DragConstraint {
-        NONE,
-        PARENT_BOUNDS
-    }
-    protected boolean draggable = false;
-    protected DragConstraint dragConstraint = DragConstraint.NONE;
-    protected boolean isDragging = false;
-    protected int dragOffsetX = 0;
-    protected int dragOffsetY = 0;
-    public GuiComponent setDraggable(boolean draggable) { this.draggable = draggable; return this; }
-    public GuiComponent setDragConstraint(DragConstraint dragConstraint) { this.dragConstraint = dragConstraint; return this; }
+    
     public String getTooltipText() { return tooltipText; }
     public void setTooltip(String tooltipText) { this.tooltipText = tooltipText; }
-    public boolean isDraggable() { return draggable; }
+    public GuiComponent getTooltipComponent() { return tooltipComponent; }
+    public void setTooltipComponent(GuiComponent tooltipComponent) { this.tooltipComponent = tooltipComponent; }
+    public com.x4yi.x4ui.client.gui.component.layout.ILayoutManager getLayoutManager() { return layoutManager; }
+    public void setLayoutManager(com.x4yi.x4ui.client.gui.component.layout.ILayoutManager layoutManager) { this.layoutManager = layoutManager; requestLayout(); }
+    public void setTheme(com.x4yi.x4ui.client.gui.utils.ITheme theme) { this.theme = theme; requestRender(); }
+    public com.x4yi.x4ui.client.gui.utils.ITheme getTheme() {
+        if (this.theme != null) return this.theme;
+        if (this.parent != null) return this.parent.getTheme();
+        return com.x4yi.x4ui.client.gui.utils.DefaultTheme.INSTANCE;
+    }
     public int getLayer() { return layer; }
     public void setLayer(int layer) {
         if (this.layer != layer) {
             this.layer = layer;
-            if (parent != null) parent.markDirty();
+            if (parent != null) parent.requestRender();
         }
     }
-    public void markDirty() {
+
+    public void requestLayout() {
         this.needsLayout = true;
+    }
+
+    public void requestRender() {
         this.needsRenderSort = true;
-        if (parent != null) {
-            parent.markDirty();
+    }
+
+    public void markDirty() {
+        requestLayout();
+        requestRender();
+    }
+    
+    protected GuiComponent focusedComponent = null;
+
+    public GuiComponent getRoot() {
+        GuiComponent current = this;
+        while (current.getParent() != null) {
+            current = current.getParent();
+        }
+        return current;
+    }
+
+    public void requestFocus() {
+        GuiComponent root = getRoot();
+        if (root.focusedComponent != this) {
+            if (root.focusedComponent != null) {
+                root.focusedComponent.onFocusLost();
+            }
+            root.focusedComponent = this;
+            this.onFocusGained();
         }
     }
+
+    public void clearFocus() {
+        GuiComponent root = getRoot();
+        if (root.focusedComponent == this) {
+            this.onFocusLost();
+            root.focusedComponent = null;
+        }
+    }
+
+    public boolean isFocused() {
+        return getRoot().focusedComponent == this;
+    }
+
+    protected void onFocusGained() {}
+    protected void onFocusLost() {}
     public GuiComponent(int x, int y, int width, int height) {
         this.x = x;
         this.y = y;
@@ -89,19 +135,44 @@ public abstract class GuiComponent {
     public int getAbsoluteY() {
         return parent == null ? y : parent.getAbsoluteY() + y;
     }
-    public void update() {
+    public void tick(float deltaTime) {
         if (!visible) return;
+        if (needsLayout && layoutManager != null) {
+            layoutManager.layout(this, children);
+            needsLayout = false;
+        }
         for (GuiComponent child : children) {
-            child.update();
+            child.tick(deltaTime);
         }
     }
-    public void drawComponent(int mouseX, int mouseY, float partialTicks) {
-        if (!visible) return;
-        drawSelf(mouseX, mouseY, partialTicks);
-        drawChildren(mouseX, mouseY, partialTicks);
+    public void destroy() {
+        for (Runnable unbinder : unbinders) {
+            unbinder.run();
+        }
+        unbinders.clear();
+        for (GuiComponent child : children) {
+            child.destroy();
+        }
     }
-    protected abstract void drawSelf(int mouseX, int mouseY, float partialTicks);
-    protected void drawChildren(int mouseX, int mouseY, float partialTicks) {
+    public <T> void bindState(com.x4yi.x4ui.common.State<T> state, java.util.function.Consumer<T> onChange) {
+        java.util.function.Consumer<T> listener = value -> {
+            if (Minecraft.getMinecraft().isCallingFromMinecraftThread()) {
+                onChange.accept(value);
+            } else {
+                Minecraft.getMinecraft().addScheduledTask(() -> onChange.accept(value));
+            }
+        };
+        state.addListener(listener);
+        unbinders.add(() -> state.removeListener(listener));
+        listener.accept(state.get());
+    }
+    public void render(int mouseX, int mouseY, float partialTicks) {
+        if (!visible) return;
+        renderSelf(mouseX, mouseY, partialTicks);
+        renderChildren(mouseX, mouseY, partialTicks);
+    }
+    protected abstract void renderSelf(int mouseX, int mouseY, float partialTicks);
+    protected void renderChildren(int mouseX, int mouseY, float partialTicks) {
         if (needsRenderSort) {
             renderChildren.clear();
             renderChildren.addAll(children);
@@ -109,78 +180,67 @@ public abstract class GuiComponent {
             needsRenderSort = false;
         }
         for (GuiComponent child : renderChildren) {
-            child.drawComponent(mouseX, mouseY, partialTicks);
+            child.render(mouseX, mouseY, partialTicks);
         }
     }
-    public boolean mouseClicked(int mouseX, int mouseY, int mouseButton) {
+    public boolean onMouseClick(int mouseX, int mouseY, int mouseButton) {
         if (!visible || !enabled) return false;
-        for (int i = renderChildren.size() - 1; i >= 0; i--) {
-            if (renderChildren.get(i).mouseClicked(mouseX, mouseY, mouseButton)) {
-                return true;
+        
+        if (this.parent == null) {
+            GuiComponent hovered = getHoveredComponent(mouseX, mouseY);
+            if (this.focusedComponent != null && hovered != this.focusedComponent) {
+                this.focusedComponent.clearFocus();
             }
         }
-        if (draggable && isMouseOver(mouseX, mouseY) && mouseButton == 0) {
-            isDragging = true;
-            dragOffsetX = mouseX - getAbsoluteX();
-            dragOffsetY = mouseY - getAbsoluteY();
-            return true;
-        }
-        return false;
-    }
-    public boolean mouseReleased(int mouseX, int mouseY, int state) {
-        if (!visible || !enabled) return false;
+
         for (int i = renderChildren.size() - 1; i >= 0; i--) {
-            if (renderChildren.get(i).mouseReleased(mouseX, mouseY, state)) {
-                return true;
-            }
-        }
-        if (isDragging) {
-            isDragging = false;
-            return true;
-        }
-        return false;
-    }
-    public boolean mouseClickMove(int mouseX, int mouseY, int clickedMouseButton, long timeSinceLastClick) {
-        if (!visible || !enabled) return false;
-        for (int i = renderChildren.size() - 1; i >= 0; i--) {
-            if (renderChildren.get(i).mouseClickMove(mouseX, mouseY, clickedMouseButton, timeSinceLastClick)) {
-                return true;
-            }
-        }
-        if (isDragging) {
-            int newAbsX = mouseX - dragOffsetX;
-            int newAbsY = mouseY - dragOffsetY;
-            if (dragConstraint == DragConstraint.PARENT_BOUNDS && parent != null) {
-                int pX = parent.getAbsoluteX() + parent.getPadding();
-                int pY = parent.getAbsoluteY() + parent.getPadding();
-                int pW = parent.getWidth() - parent.getPadding() * 2;
-                int pH = parent.getHeight() - parent.getPadding() * 2;
-                if (newAbsX < pX) newAbsX = pX;
-                if (newAbsY < pY) newAbsY = pY;
-                if (newAbsX + width > pX + pW) newAbsX = pX + pW - width;
-                if (newAbsY + height > pY + pH) newAbsY = pY + pH - height;
-            }
-            int newX = parent != null ? newAbsX - parent.getAbsoluteX() : newAbsX;
-            int newY = parent != null ? newAbsY - parent.getAbsoluteY() : newAbsY;
-            setX(newX);
-            setY(newY);
-            return true;
-        }
-        return false;
-    }
-    public boolean keyTyped(char typedChar, int keyCode) {
-        if (!visible || !enabled) return false;
-        for (int i = renderChildren.size() - 1; i >= 0; i--) {
-            if (renderChildren.get(i).keyTyped(typedChar, keyCode)) {
+            if (renderChildren.get(i).onMouseClick(mouseX, mouseY, mouseButton)) {
                 return true;
             }
         }
         return false;
     }
-    public boolean handleMouseScroll(int mouseX, int mouseY, int wheel) {
+    public boolean onMouseRelease(int mouseX, int mouseY, int state) {
         if (!visible || !enabled) return false;
         for (int i = renderChildren.size() - 1; i >= 0; i--) {
-            if (renderChildren.get(i).handleMouseScroll(mouseX, mouseY, wheel)) {
+            if (renderChildren.get(i).onMouseRelease(mouseX, mouseY, state)) {
+                return true;
+            }
+        }
+        return false;
+    }
+    public boolean onMouseDrag(int mouseX, int mouseY, int clickedMouseButton, long timeSinceLastClick) {
+        if (!visible || !enabled) return false;
+        for (int i = renderChildren.size() - 1; i >= 0; i--) {
+            if (renderChildren.get(i).onMouseDrag(mouseX, mouseY, clickedMouseButton, timeSinceLastClick)) {
+                return true;
+            }
+        }
+        return false;
+    }
+    public boolean onKeyPress(char typedChar, int keyCode) {
+        if (!visible || !enabled) return false;
+
+        if (this.parent == null && this.focusedComponent != null) {
+            if (this.focusedComponent.onKeyPress(typedChar, keyCode)) {
+                return true;
+            }
+        }
+
+        for (int i = renderChildren.size() - 1; i >= 0; i--) {
+            GuiComponent child = renderChildren.get(i);
+            if (this.parent == null && child == this.focusedComponent) continue; 
+            
+            if (child.onKeyPress(typedChar, keyCode)) {
+                return true;
+            }
+        }
+        return false;
+    }
+    public boolean onMouseScroll(int mouseX, int mouseY, int wheel) {
+        if (!visible || !enabled) return false;
+        for (int i = renderChildren.size() - 1; i >= 0; i--) {
+            if (renderChildren.get(i).onMouseScroll(mouseX, mouseY, wheel)) {
                 return true;
             }
         }
@@ -197,7 +257,7 @@ public abstract class GuiComponent {
             GuiComponent hovered = renderChildren.get(i).getHoveredComponent(mouseX, mouseY);
             if (hovered != null) return hovered;
         }
-        if (tooltipText != null) {
+        if (tooltipText != null || tooltipComponent != null) {
             return this;
         }
         return null;
@@ -227,16 +287,16 @@ public abstract class GuiComponent {
     public int getY() { return y; }
     public int getWidth() { return width; }
     public int getHeight() { return height; }
-    public int getPadding() { return padding; }
-    public int getMargin() { return margin; }
-    public void setX(int x) { if (this.x != x) { this.x = x; markDirty(); } }
-    public void setY(int y) { if (this.y != y) { this.y = y; markDirty(); } }
-    public void setWidth(int width) { if (this.width != width) { this.width = width; markDirty(); } }
-    public void setHeight(int height) { if (this.height != height) { this.height = height; markDirty(); } }
-    public void setPadding(int padding) { if (this.padding != padding) { this.padding = padding; markDirty(); } }
-    public void setMargin(int margin) { if (this.margin != margin) { this.margin = margin; markDirty(); } }
+    public com.x4yi.x4ui.client.gui.utils.Insets getPadding() { return padding; }
+    public com.x4yi.x4ui.client.gui.utils.Insets getMargin() { return margin; }
+    public void setX(int x) { if (this.x != x) { this.x = x; if (parent != null) parent.requestLayout(); } }
+    public void setY(int y) { if (this.y != y) { this.y = y; if (parent != null) parent.requestLayout(); } }
+    public void setWidth(int width) { if (this.width != width) { this.width = width; requestLayout(); if (parent != null) parent.requestLayout(); } }
+    public void setHeight(int height) { if (this.height != height) { this.height = height; requestLayout(); if (parent != null) parent.requestLayout(); } }
+    public void setPadding(com.x4yi.x4ui.client.gui.utils.Insets padding) { this.padding = padding; requestLayout(); }
+    public void setMargin(com.x4yi.x4ui.client.gui.utils.Insets margin) { this.margin = margin; if (parent != null) parent.requestLayout(); }
     public boolean isVisible() { return visible; }
-    public void setVisible(boolean visible) { if (this.visible != visible) { this.visible = visible; markDirty(); } }
+    public void setVisible(boolean visible) { if (this.visible != visible) { this.visible = visible; if (parent != null) parent.requestLayout(); } }
     public boolean isEnabled() { return enabled; }
     public void setEnabled(boolean enabled) { this.enabled = enabled; }
     protected int lerpColor(int color1, int color2, float t) {

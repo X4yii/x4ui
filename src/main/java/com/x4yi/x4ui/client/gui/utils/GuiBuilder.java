@@ -15,7 +15,7 @@ import com.x4yi.x4ui.client.gui.component.slider.GuiSliderFloat;
 import com.x4yi.x4ui.client.gui.component.slider.GuiSliderDouble;
 import com.x4yi.x4ui.client.gui.component.layout.FlexDirection;
 import com.x4yi.x4ui.client.gui.base.GuiBaseContainer;
-import com.x4yi.x4ui.client.gui.utils.State;
+import com.x4yi.x4ui.common.State;
 import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.item.ItemStack;
 import net.minecraft.inventory.Slot;
@@ -77,11 +77,11 @@ public class GuiBuilder<T extends GuiComponent> {
         component.setHeight(height);
         return this;
     }
-    public GuiBuilder<T> margin(int margin) {
+    public GuiBuilder<T> margin(com.x4yi.x4ui.client.gui.utils.Insets margin) {
         component.setMargin(margin);
         return this;
     }
-    public GuiBuilder<T> padding(int padding) {
+    public GuiBuilder<T> padding(com.x4yi.x4ui.client.gui.utils.Insets padding) {
         component.setPadding(padding);
         return this;
     }
@@ -97,16 +97,7 @@ public class GuiBuilder<T extends GuiComponent> {
         component.setLayer(layer);
         return this;
     }
-    public GuiBuilder<T> draggable(boolean draggable) {
-        component.setDraggable(draggable);
-        if (draggable) component.setDragConstraint(GuiComponent.DragConstraint.NONE);
-        return this;
-    }
-    public GuiBuilder<T> draggableConstrained(boolean draggable) {
-        component.setDraggable(draggable);
-        if (draggable) component.setDragConstraint(GuiComponent.DragConstraint.PARENT_BOUNDS);
-        return this;
-    }
+
     public GuiBuilder<T> flexDirection(FlexDirection direction) {
         if (component instanceof GuiPanel) {
             ((GuiPanel) component).setFlexDirection(direction);
@@ -187,6 +178,10 @@ public class GuiBuilder<T extends GuiComponent> {
     }
     public GuiBuilder<T> tooltip(String text) {
         component.setTooltip(text);
+        return this;
+    }
+    public GuiBuilder<T> tooltip(GuiComponent tooltipComponent) {
+        component.setTooltipComponent(tooltipComponent);
         return this;
     }
     public GuiBuilder<T> bindVisible(State<Boolean> state) {

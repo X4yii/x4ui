@@ -9,16 +9,19 @@ public class GuiTextInput extends GuiComponent {
     protected int maxLength = 256;
     protected int cursorPosition = 0;
     protected int selectionEnd = 0;
-    protected boolean focused = false;
     protected int cursorCounter = 0;
-    protected int bgColor = 0xFF16161E;
-    protected int borderColor = 0xFF2C2C36;
-    protected int focusedBorderColor = 0xFF29B6F6;
-    protected int textColor = 0xFFFFFFFF;
-    protected int placeholderColor = 0xFF888892;
-    protected int selectionColor = 0x8829B6F6;
+    protected int submitKeyCode = Keyboard.KEY_RETURN;
+    protected Runnable onSubmit = null;
     public GuiTextInput(int x, int y, int width, int height) {
         super(x, y, width, height);
+    }
+    public GuiTextInput setSubmitKey(int keyCode) {
+        this.submitKeyCode = keyCode;
+        return this;
+    }
+    public GuiTextInput onEnter(Runnable onSubmit) {
+        this.onSubmit = onSubmit;
+        return this;
     }
     public void setText(String text) {
         this.text = text;
@@ -28,55 +31,62 @@ public class GuiTextInput extends GuiComponent {
     public String getText() { return text; }
     public void setPlaceholder(String placeholder) { this.placeholder = placeholder; }
     public void setMaxLength(int max) { this.maxLength = max; }
+    
     @Override
-    public void update() {
-        super.update();
-        if (focused) cursorCounter++;
+    protected void onFocusGained() {
+        cursorCounter = 0;
     }
     @Override
-    protected void drawSelf(int mouseX, int mouseY, float partialTicks) {
+    public void tick(float deltaTime) {
+        super.tick(deltaTime);
+        if (isFocused()) cursorCounter++;
+    }
+    @Override
+    protected void renderSelf(int mouseX, int mouseY, float partialTicks) {
         int absX = getAbsoluteX();
         int absY = getAbsoluteY();
-        drawRect(absX, absY, absX + width, absY + height, bgColor);
-        drawBorder(absX, absY, absX + width, absY + height, focused ? focusedBorderColor : borderColor);
+        com.x4yi.x4ui.client.gui.utils.ITheme theme = getTheme();
+        
+        drawRect(absX, absY, absX + width, absY + height, theme.getTextInputBackgroundColor());
+        drawBorder(absX, absY, absX + width, absY + height, isFocused() ? theme.getTextInputFocusedBorderColor() : theme.getTextInputBorderColor());
         int textY = absY + (height - fontRenderer.FONT_HEIGHT) / 2;
         int textX = absX + 4;
-        if (text.isEmpty() && !focused && !placeholder.isEmpty()) {
-            fontRenderer.drawString(placeholder, textX, textY, placeholderColor);
+        if (text.isEmpty() && !isFocused() && !placeholder.isEmpty()) {
+            fontRenderer.drawString(placeholder, textX, textY, theme.getDisabledTextColor());
             return;
         }
         String renderedText = fontRenderer.trimStringToWidth(text, width - 8);
-        fontRenderer.drawString(renderedText, textX, textY, textColor);
-        if (focused && (cursorCounter / 6) % 2 == 0) {
+        fontRenderer.drawString(renderedText, textX, textY, theme.getTextColor());
+        if (isFocused() && (cursorCounter / 6) % 2 == 0) {
             int cursorX = textX + fontRenderer.getStringWidth(renderedText.substring(0, Math.min(cursorPosition, renderedText.length())));
             Gui.drawRect(cursorX, textY - 1, cursorX + 1, textY + fontRenderer.FONT_HEIGHT + 1, 0xFFFFFFFF);
         }
         if (selectionEnd != cursorPosition) {
             int startX = textX + fontRenderer.getStringWidth(renderedText.substring(0, Math.min(Math.min(cursorPosition, selectionEnd), renderedText.length())));
             int endX = textX + fontRenderer.getStringWidth(renderedText.substring(0, Math.min(Math.max(cursorPosition, selectionEnd), renderedText.length())));
-            Gui.drawRect(startX, textY - 1, endX, textY + fontRenderer.FONT_HEIGHT + 1, selectionColor);
+            int selColor = (theme.getTextInputFocusedBorderColor() & 0x00FFFFFF) | 0x88000000;
+            Gui.drawRect(startX, textY - 1, endX, textY + fontRenderer.FONT_HEIGHT + 1, selColor);
         }
     }
     @Override
-    public boolean mouseClicked(int mouseX, int mouseY, int mouseButton) {
-        if (!super.mouseClicked(mouseX, mouseY, mouseButton)) {
-            boolean wasFocused = focused;
-            focused = isMouseOver(mouseX, mouseY) && enabled;
-            if (focused) {
-                cursorCounter = 0;
+    public boolean onMouseClick(int mouseX, int mouseY, int mouseButton) {
+        if (!super.onMouseClick(mouseX, mouseY, mouseButton)) {
+            boolean wasFocused = isFocused();
+            boolean clickedOnUs = isMouseOver(mouseX, mouseY) && enabled;
+            if (clickedOnUs) {
+                this.requestFocus();
                 cursorPosition = text.length();
                 selectionEnd = cursorPosition;
                 return true;
-            }
-            if (wasFocused && !focused) {
-                return true;
+            } else if (wasFocused) {
+                this.clearFocus();
             }
         }
         return false;
     }
     @Override
-    public boolean keyTyped(char typedChar, int keyCode) {
-        if (!focused || !enabled) return false;
+    public boolean onKeyPress(char typedChar, int keyCode) {
+        if (!isFocused() || !enabled) return false;
         if (GuiScreen.isKeyComboCtrlA(keyCode)) {
             cursorPosition = text.length();
             selectionEnd = 0;
@@ -91,6 +101,12 @@ public class GuiTextInput extends GuiComponent {
             GuiScreen.setClipboardString(getSelectedText());
             writeText("");
             return true;
+        }
+        if (keyCode == submitKeyCode) {
+            if (onSubmit != null) {
+                onSubmit.run();
+                return true;
+            }
         }
         switch (keyCode) {
             case Keyboard.KEY_BACK:
