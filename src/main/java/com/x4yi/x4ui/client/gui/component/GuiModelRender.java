@@ -67,44 +67,57 @@ public class GuiModelRender extends GuiComponent {
     protected void renderSelf(int mouseX, int mouseY, float partialTicks) {
         int centerX = getAbsoluteX() + width / 2;
         int centerY = getAbsoluteY() + height / 2;
-        GlStateManager.pushMatrix();
-        GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
-        GlStateManager.enableColorMaterial();
-        GlStateManager.translate(centerX + offsetX, centerY + offsetY, 50.0F + offsetZ);
-        GlStateManager.scale(-scale, scale, scale);
-        GlStateManager.rotate(180.0F, 0.0F, 0.0F, 1.0F);
-        float f = entity != null ? entity.renderYawOffset : 0;
-        float fp = entity != null ? entity.prevRenderYawOffset : 0;
-        float f1 = entity != null ? entity.rotationYaw : 0;
-        float f1p = entity != null ? entity.prevRotationYaw : 0;
-        float f2 = entity != null ? entity.rotationPitch : 0;
-        float f2p = entity != null ? entity.prevRotationPitch : 0;
-        float f3 = entity != null ? entity.prevRotationYawHead : 0;
-        float f4 = entity != null ? entity.rotationYawHead : 0;
-        if (entity != null && lookAtCursor && !dragging) {
-            float mouseRelX = (float) centerX - mouseX;
-            float mouseRelY = (float) centerY - (scale * entity.getEyeHeight()) - mouseY;
-            GlStateManager.rotate(135.0F, 0.0F, 1.0F, 0.0F);
-            RenderHelper.enableStandardItemLighting();
-            GlStateManager.rotate(-135.0F, 0.0F, 1.0F, 0.0F);
-            GlStateManager.rotate(-((float) Math.atan((double) (mouseRelY / 40.0F))) * 20.0F, 1.0F, 0.0F, 0.0F);
-            entity.renderYawOffset = (float) Math.atan((double) (mouseRelX / 40.0F)) * 20.0F;
-            entity.prevRenderYawOffset = entity.renderYawOffset;
-            entity.rotationYaw = (float) Math.atan((double) (mouseRelX / 40.0F)) * 40.0F;
-            entity.prevRotationYaw = entity.rotationYaw;
-            entity.rotationPitch = -((float) Math.atan((double) (mouseRelY / 40.0F))) * 20.0F;
-            entity.prevRotationPitch = entity.rotationPitch;
-            entity.rotationYawHead = entity.rotationYaw;
-            entity.prevRotationYawHead = entity.rotationYaw;
-        } else {
-            GlStateManager.rotate(135.0F, 0.0F, 1.0F, 0.0F);
-            RenderHelper.enableStandardItemLighting();
-            GlStateManager.rotate(-135.0F, 0.0F, 1.0F, 0.0F);
+        if (itemStack != null && !itemStack.isEmpty()) {
+            GlStateManager.pushMatrix();
+            GlStateManager.translate(centerX + offsetX, centerY + offsetY, offsetZ);
+            float itemScale = scale / 16.0f;
+            GlStateManager.scale(itemScale, itemScale, 1.0f);
+            RenderHelper.enableGUIStandardItemLighting();
+            Minecraft.getMinecraft().getRenderItem().renderItemAndEffectIntoGUI(itemStack, -8, -8);
+            RenderHelper.disableStandardItemLighting();
+            GlStateManager.popMatrix();
+            return;
         }
-        GlStateManager.rotate(rotationX, 1.0F, 0.0F, 0.0F);
-        GlStateManager.rotate(rotationY, 0.0F, 1.0F, 0.0F);
-        GlStateManager.rotate(rotationZ, 0.0F, 0.0F, 1.0F);
+
         if (entity != null) {
+            GlStateManager.pushMatrix();
+            GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
+            GlStateManager.enableColorMaterial();
+            GlStateManager.translate(centerX + offsetX, centerY + offsetY, 50.0F + offsetZ);
+            GlStateManager.scale(-scale, scale, scale);
+            GlStateManager.rotate(180.0F, 0.0F, 0.0F, 1.0F);
+            float f = entity.renderYawOffset;
+            float fp = entity.prevRenderYawOffset;
+            float f1 = entity.rotationYaw;
+            float f1p = entity.prevRotationYaw;
+            float f2 = entity.rotationPitch;
+            float f2p = entity.prevRotationPitch;
+            float f3 = entity.prevRotationYawHead;
+            float f4 = entity.rotationYawHead;
+            if (lookAtCursor && !dragging) {
+                float mouseRelX = (float) centerX - mouseX;
+                float mouseRelY = (float) centerY - (scale * entity.getEyeHeight()) - mouseY;
+                GlStateManager.rotate(135.0F, 0.0F, 1.0F, 0.0F);
+                RenderHelper.enableStandardItemLighting();
+                GlStateManager.rotate(-135.0F, 0.0F, 1.0F, 0.0F);
+                GlStateManager.rotate(-((float) Math.atan((double) (mouseRelY / 40.0F))) * 20.0F, 1.0F, 0.0F, 0.0F);
+                entity.renderYawOffset = (float) Math.atan((double) (mouseRelX / 40.0F)) * 20.0F;
+                entity.prevRenderYawOffset = entity.renderYawOffset;
+                entity.rotationYaw = (float) Math.atan((double) (mouseRelX / 40.0F)) * 40.0F;
+                entity.prevRotationYaw = entity.rotationYaw;
+                entity.rotationPitch = -((float) Math.atan((double) (mouseRelY / 40.0F))) * 20.0F;
+                entity.prevRotationPitch = entity.rotationPitch;
+                entity.rotationYawHead = entity.rotationYaw;
+                entity.prevRotationYawHead = entity.rotationYaw;
+            } else {
+                GlStateManager.rotate(135.0F, 0.0F, 1.0F, 0.0F);
+                RenderHelper.enableStandardItemLighting();
+                GlStateManager.rotate(-135.0F, 0.0F, 1.0F, 0.0F);
+            }
+            GlStateManager.rotate(rotationX, 1.0F, 0.0F, 0.0F);
+            GlStateManager.rotate(rotationY, 0.0F, 1.0F, 0.0F);
+            GlStateManager.rotate(rotationZ, 0.0F, 0.0F, 1.0F);
+            
             if (!enableEntityAnimations && !lookAtCursor) {
                 entity.renderYawOffset = 0;
                 entity.rotationYaw = 0;
@@ -125,15 +138,16 @@ public class GuiModelRender extends GuiComponent {
             entity.prevRotationPitch = f2p;
             entity.prevRotationYawHead = f3;
             entity.rotationYawHead = f4;
-        } else if (itemStack != null && !itemStack.isEmpty()) {
-            Minecraft.getMinecraft().getRenderItem().renderItemIntoGUI(itemStack, -8, -8);
+
+            RenderHelper.disableStandardItemLighting();
+            GlStateManager.disableRescaleNormal();
+            GlStateManager.disableColorMaterial();
+            GlStateManager.setActiveTexture(OpenGlHelper.lightmapTexUnit);
+            GlStateManager.disableTexture2D();
+            GlStateManager.setActiveTexture(OpenGlHelper.defaultTexUnit);
+            GlStateManager.disableDepth();
+            GlStateManager.popMatrix();
         }
-        RenderHelper.disableStandardItemLighting();
-        GlStateManager.disableRescaleNormal();
-        GlStateManager.setActiveTexture(OpenGlHelper.lightmapTexUnit);
-        GlStateManager.disableTexture2D();
-        GlStateManager.setActiveTexture(OpenGlHelper.defaultTexUnit);
-        GlStateManager.popMatrix();
     }
     @Override
     public boolean onMouseClick(int mouseX, int mouseY, int mouseButton) {

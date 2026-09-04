@@ -9,6 +9,7 @@ import com.x4yi.x4ui.client.gui.component.GuiModelRender;
 import com.x4yi.x4ui.client.gui.component.GuiSlot;
 import com.x4yi.x4ui.client.gui.component.GuiSprite;
 import com.x4yi.x4ui.client.gui.component.GuiTextInput;
+import com.x4yi.x4ui.client.gui.component.GuiToggle;
 import com.x4yi.x4ui.client.gui.component.GuiDropdown;
 import com.x4yi.x4ui.client.gui.component.slider.GuiSliderInt;
 import com.x4yi.x4ui.client.gui.component.slider.GuiSliderFloat;
@@ -66,6 +67,12 @@ public class GuiBuilder<T extends GuiComponent> {
     }
     public static <E> GuiBuilder<GuiDropdown<E>> createDropdown(State<E> state, java.util.List<E> options) {
         return new GuiBuilder<>(new GuiDropdown<>(0, 0, 100, 20, state, options));
+    }
+    public static GuiBuilder<GuiToggle> createToggle(String label, boolean defaultState, java.util.function.Consumer<Boolean> onStateChanged) {
+        return new GuiBuilder<>(new GuiToggle(0, 0, 100, 20, label, defaultState, onStateChanged));
+    }
+    public static GuiBuilder<GuiToggle> createToggle(String label, State<Boolean> state) {
+        return new GuiBuilder<>(new GuiToggle(0, 0, 100, 20, label, state));
     }
     public GuiBuilder<T> position(int x, int y) {
         component.setX(x);
@@ -185,19 +192,16 @@ public class GuiBuilder<T extends GuiComponent> {
         return this;
     }
     public GuiBuilder<T> bindVisible(State<Boolean> state) {
-        state.addListener(component::setVisible);
-        component.setVisible(state.get());
+        component.bindState(state, component::setVisible);
         return this;
     }
     public GuiBuilder<T> bindEnabled(State<Boolean> state) {
-        state.addListener(component::setEnabled);
-        component.setEnabled(state.get());
+        component.bindState(state, component::setEnabled);
         return this;
     }
     public GuiBuilder<T> bindLabelText(State<String> state) {
         if (component instanceof GuiLabel) {
-            state.addListener(((GuiLabel) component)::setText);
-            ((GuiLabel) component).setText(state.get());
+            component.bindState(state, ((GuiLabel) component)::setText);
         }
         return this;
     }

@@ -141,6 +141,20 @@ public class DirectMemoryVideoDecoder implements IVideoDecoder {
         size = 0;
         head = 0;
         tail = 0;
+        if (directBuffer != null) {
+            try {
+                java.lang.reflect.Method cleanerMethod = directBuffer.getClass().getMethod("cleaner");
+                cleanerMethod.setAccessible(true);
+                Object cleaner = cleanerMethod.invoke(directBuffer);
+                if (cleaner != null) {
+                    java.lang.reflect.Method cleanMethod = cleaner.getClass().getMethod("clean");
+                    cleanMethod.setAccessible(true);
+                    cleanMethod.invoke(cleaner);
+                }
+            } catch (Throwable ignored) {
+            }
+            directBuffer = null;
+        }
     }
 
     @Override

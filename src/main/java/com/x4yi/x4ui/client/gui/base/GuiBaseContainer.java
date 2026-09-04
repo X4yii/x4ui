@@ -10,6 +10,7 @@ public abstract class GuiBaseContainer extends GuiContainer {
     protected boolean isAnimating = true;
     protected static final float ANIMATION_SPEED = 0.15f;
     protected com.x4yi.x4ui.common.sync.IGuiActionSender actionSender;
+    private long lastRenderTime = 0;
     public void setActionSender(com.x4yi.x4ui.common.sync.IGuiActionSender actionSender) {
         this.actionSender = actionSender;
     }
@@ -23,10 +24,21 @@ public abstract class GuiBaseContainer extends GuiContainer {
     public void initGui() {
         super.initGui();
         GuiBaseScreen.currentScaleFactor = new net.minecraft.client.gui.ScaledResolution(mc).getScaleFactor();
-        rootPanel = new GuiPanel(0, 0, width, height);
-        jeiRecipeAreas.clear();
-        initComponents();
+        if (rootPanel == null) {
+            rootPanel = new GuiPanel(0, 0, width, height);
+            jeiRecipeAreas.clear();
+            initComponents();
+        } else {
+            rootPanel.setWidth(width);
+            rootPanel.setHeight(height);
+            rootPanel.requestLayout();
+            onScreenResize(width, height);
+        }
     }
+
+    protected void onScreenResize(int newWidth, int newHeight) {
+    }
+
     protected abstract void initComponents();
     public int getGuiLeft() { return this.guiLeft; }
     public int getGuiTop() { return this.guiTop; }
@@ -35,6 +47,13 @@ public abstract class GuiBaseContainer extends GuiContainer {
     }
     @Override
     public void drawScreen(int mouseX, int mouseY, float partialTicks) {
+        long currentTime = System.currentTimeMillis();
+        if (lastRenderTime != 0) {
+            GuiBaseScreen.deltaTime = (currentTime - lastRenderTime) / 1000f;
+            if (GuiBaseScreen.deltaTime > 0.1f) GuiBaseScreen.deltaTime = 0.1f;
+            if (GuiBaseScreen.deltaTime < 0) GuiBaseScreen.deltaTime = 0;
+        }
+        lastRenderTime = currentTime;
         if (rootPanel != null) {
             rootPanel.tick(GuiBaseScreen.deltaTime);
         }
@@ -124,6 +143,7 @@ public abstract class GuiBaseContainer extends GuiContainer {
         if (rootPanel != null) {
             rootPanel.destroy();
         }
+        com.x4yi.x4ui.client.gui.utils.ScissorHelper.clear();
     }
     protected void updateAnimation() {
         if (isAnimating) {

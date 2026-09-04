@@ -1,19 +1,14 @@
 package com.x4yi.x4ui.client.gui.utils;
 
 import com.x4yi.x4ui.client.gui.component.GuiComponent;
-import com.x4yi.x4ui.client.gui.component.GuiLabel;
-import com.x4yi.x4ui.client.gui.component.GuiTooltip;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.FontRenderer;
 
-import java.util.ArrayList;
 import java.util.List;
 
 public class DefaultTheme implements ITheme {
 
     public static final DefaultTheme INSTANCE = new DefaultTheme();
-
-    private GuiTooltip cachedTooltipPanel;
-    private final List<String> lastTextLines = new ArrayList<>();
 
     // Tooltips
     @Override public int getTooltipBackgroundColor() { return 0xF0101010; }
@@ -47,32 +42,28 @@ public class DefaultTheme implements ITheme {
     @Override public int getTextInputBorderColor() { return 0xFFA0A0A0; }
     @Override public int getTextInputFocusedBorderColor() { return 0xFFFFFFFF; }
 
+    @Override public int getToggleOnColor() { return 0xFF00C853; }
+    @Override public int getToggleOffColor() { return 0xFF424248; }
+
     @Override
     public void drawTooltip(List<String> textLines, int mouseX, int mouseY, int screenWidth, int screenHeight) {
         if (textLines == null || textLines.isEmpty()) return;
-        if (cachedTooltipPanel == null) {
-            cachedTooltipPanel = new GuiTooltip(0, 0, 10, 10);
-            cachedTooltipPanel.setLayer(9999);
-        }
-        if (!textLines.equals(lastTextLines)) {
-            lastTextLines.clear();
-            lastTextLines.addAll(textLines);
-            cachedTooltipPanel.clearChildren();
-            cachedTooltipPanel.setPadding(new com.x4yi.x4ui.client.gui.utils.Insets(getTooltipPadding()));
-            cachedTooltipPanel.setGap(getTooltipGap());
-            int maxWidth = 0;
-            for (String line : textLines) {
-                GuiLabel label = new GuiLabel(0, 0, line, getTooltipTextColor());
-                cachedTooltipPanel.addChild(label);
-                int w = Minecraft.getMinecraft().fontRenderer.getStringWidth(line);
-                if (w > maxWidth) maxWidth = w;
+
+        FontRenderer fr = Minecraft.getMinecraft().fontRenderer;
+        int pad = getTooltipPadding();
+        int gap = getTooltipGap();
+
+        int maxTextWidth = 0;
+        for (String line : textLines) {
+            int w = fr.getStringWidth(line);
+            if (w > maxTextWidth) {
+                maxTextWidth = w;
             }
-            cachedTooltipPanel.setWidth(maxWidth + getTooltipPadding() * 2);
-            cachedTooltipPanel.requestLayout();
         }
-        cachedTooltipPanel.tick(com.x4yi.x4ui.client.gui.base.GuiBaseScreen.deltaTime);
-        int tooltipWidth = cachedTooltipPanel.getWidth();
-        int tooltipHeight = cachedTooltipPanel.getHeight();
+
+        int tooltipWidth = maxTextWidth + pad * 2;
+        int tooltipHeight = textLines.size() * (fr.FONT_HEIGHT + gap) - gap + pad * 2;
+
         int x = mouseX + 12;
         int y = mouseY - 12;
         if (x + tooltipWidth > screenWidth) {
@@ -84,9 +75,15 @@ public class DefaultTheme implements ITheme {
         if (y < 0) {
             y = 0;
         }
-        cachedTooltipPanel.setX(x);
-        cachedTooltipPanel.setY(y);
-        cachedTooltipPanel.render(mouseX, mouseY, Minecraft.getMinecraft().getRenderPartialTicks());
+
+        GuiComponent.drawBorder(x, y, x + tooltipWidth, y + tooltipHeight, getTooltipBorderColor());
+        GuiComponent.drawRect(x + 1, y + 1, x + tooltipWidth - 1, y + tooltipHeight - 1, getTooltipBackgroundColor());
+
+        int lineY = y + pad;
+        for (String line : textLines) {
+            fr.drawStringWithShadow(line, x + pad, lineY, getTooltipTextColor());
+            lineY += fr.FONT_HEIGHT + gap;
+        }
     }
 
     @Override

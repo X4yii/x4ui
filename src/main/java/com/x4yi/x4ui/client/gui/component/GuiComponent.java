@@ -1,9 +1,14 @@
 package com.x4yi.x4ui.client.gui.component;
+
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.FontRenderer;
+import net.minecraftforge.fml.relauncher.Side;
+import net.minecraftforge.fml.relauncher.SideOnly;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+
+@SideOnly(Side.CLIENT)
 public abstract class GuiComponent {
     protected final Minecraft mc = Minecraft.getMinecraft();
     protected final FontRenderer fontRenderer = mc.fontRenderer;
@@ -109,12 +114,15 @@ public abstract class GuiComponent {
         markDirty();
     }
     public void removeChild(GuiComponent child) {
-        children.remove(child);
-        child.setParent(null);
-        markDirty();
+        if (child != null && children.remove(child)) {
+            child.destroy();
+            child.setParent(null);
+            markDirty();
+        }
     }
     public void clearChildren() {
         for (GuiComponent child : children) {
+            child.destroy();
             child.setParent(null);
         }
         children.clear();
@@ -268,10 +276,10 @@ public abstract class GuiComponent {
         return mouseX >= absX && mouseX <= absX + width &&
                mouseY >= absY && mouseY <= absY + height;
     }
-    protected void drawRect(int left, int top, int right, int bottom, int color) {
+    public static void drawRect(int left, int top, int right, int bottom, int color) {
         net.minecraft.client.gui.Gui.drawRect(left, top, right, bottom, color);
     }
-    protected void drawBorder(int left, int top, int right, int bottom, int color) {
+    public static void drawBorder(int left, int top, int right, int bottom, int color) {
         drawRect(left, top, right, top + 1, color);
         drawRect(left, bottom - 1, right, bottom, color);
         drawRect(left, top + 1, left + 1, bottom - 1, color);

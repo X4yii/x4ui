@@ -36,6 +36,9 @@ public interface ITheme {
     int getTextInputBorderColor();
     int getTextInputFocusedBorderColor();
 
+    int getToggleOnColor();
+    int getToggleOffColor();
+
     // Tooltip Rendering
     void drawTooltip(List<String> textLines, int mouseX, int mouseY, int screenWidth, int screenHeight);
     void drawTooltipComponent(GuiComponent component, int mouseX, int mouseY, int screenWidth, int screenHeight);

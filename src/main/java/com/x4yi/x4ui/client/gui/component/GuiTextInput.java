@@ -1,73 +1,128 @@
 package com.x4yi.x4ui.client.gui.component;
+
 import net.minecraft.client.gui.Gui;
 import net.minecraft.client.gui.GuiScreen;
 import net.minecraft.util.ChatAllowedCharacters;
+import net.minecraft.util.math.MathHelper;
 import org.lwjgl.input.Keyboard;
+
 public class GuiTextInput extends GuiComponent {
     protected String text = "";
     protected String placeholder = "";
     protected int maxLength = 256;
     protected int cursorPosition = 0;
     protected int selectionEnd = 0;
+    protected int lineScrollOffset = 0;
     protected int cursorCounter = 0;
     protected int submitKeyCode = Keyboard.KEY_RETURN;
     protected Runnable onSubmit = null;
+
     public GuiTextInput(int x, int y, int width, int height) {
         super(x, y, width, height);
     }
+
     public GuiTextInput setSubmitKey(int keyCode) {
         this.submitKeyCode = keyCode;
         return this;
     }
+
     public GuiTextInput onEnter(Runnable onSubmit) {
         this.onSubmit = onSubmit;
         return this;
     }
+
     public void setText(String text) {
-        this.text = text;
-        this.cursorPosition = text.length();
-        this.selectionEnd = this.cursorPosition;
+        this.text = text != null ? text : "";
+        if (this.text.length() > maxLength) {
+            this.text = this.text.substring(0, maxLength);
+        }
+        setCursorPosition(this.text.length());
     }
+
     public String getText() { return text; }
     public void setPlaceholder(String placeholder) { this.placeholder = placeholder; }
     public void setMaxLength(int max) { this.maxLength = max; }
-    
+
+    public void setCursorPosition(int pos) {
+        this.cursorPosition = MathHelper.clamp(pos, 0, this.text.length());
+        this.selectionEnd = this.cursorPosition;
+        clampScrollOffset();
+    }
+
+    private void clampScrollOffset() {
+        if (this.lineScrollOffset > this.text.length()) {
+            this.lineScrollOffset = this.text.length();
+        }
+        int innerWidth = Math.max(1, this.width - 8);
+        if (this.cursorPosition < this.lineScrollOffset) {
+            this.lineScrollOffset = this.cursorPosition;
+        }
+        String visible = fontRenderer.trimStringToWidth(this.text.substring(this.lineScrollOffset), innerWidth);
+        int visibleEnd = this.lineScrollOffset + visible.length();
+        if (this.cursorPosition > visibleEnd) {
+            this.lineScrollOffset += this.cursorPosition - visibleEnd;
+        }
+    }
+
     @Override
     protected void onFocusGained() {
         cursorCounter = 0;
     }
+
     @Override
     public void tick(float deltaTime) {
         super.tick(deltaTime);
         if (isFocused()) cursorCounter++;
     }
+
     @Override
     protected void renderSelf(int mouseX, int mouseY, float partialTicks) {
         int absX = getAbsoluteX();
         int absY = getAbsoluteY();
         com.x4yi.x4ui.client.gui.utils.ITheme theme = getTheme();
-        
+
         drawRect(absX, absY, absX + width, absY + height, theme.getTextInputBackgroundColor());
         drawBorder(absX, absY, absX + width, absY + height, isFocused() ? theme.getTextInputFocusedBorderColor() : theme.getTextInputBorderColor());
+
         int textY = absY + (height - fontRenderer.FONT_HEIGHT) / 2;
         int textX = absX + 4;
+        int innerWidth = Math.max(1, width - 8);
+
         if (text.isEmpty() && !isFocused() && !placeholder.isEmpty()) {
             fontRenderer.drawString(placeholder, textX, textY, theme.getDisabledTextColor());
             return;
         }
-        String renderedText = fontRenderer.trimStringToWidth(text, width - 8);
-        fontRenderer.drawString(renderedText, textX, textY, theme.getTextColor());
-        if (isFocused() && (cursorCounter / 6) % 2 == 0) {
-            int cursorX = textX + fontRenderer.getStringWidth(renderedText.substring(0, Math.min(cursorPosition, renderedText.length())));
+
+        clampScrollOffset();
+
+        String visibleText = fontRenderer.trimStringToWidth(text.substring(lineScrollOffset), innerWidth);
+        fontRenderer.drawString(visibleText, textX, textY, theme.getTextColor());
+
+        int cursorRel = cursorPosition - lineScrollOffset;
+        int selEndRel = selectionEnd - lineScrollOffset;
+
+        boolean cursorVisible = isFocused() && (cursorCounter / 6) % 2 == 0 && cursorRel >= 0 && cursorRel <= visibleText.length();
+        if (cursorVisible) {
+            int cursorX = textX + fontRenderer.getStringWidth(visibleText.substring(0, cursorRel));
             Gui.drawRect(cursorX, textY - 1, cursorX + 1, textY + fontRenderer.FONT_HEIGHT + 1, 0xFFFFFFFF);
         }
+
         if (selectionEnd != cursorPosition) {
-            int startX = textX + fontRenderer.getStringWidth(renderedText.substring(0, Math.min(Math.min(cursorPosition, selectionEnd), renderedText.length())));
-            int endX = textX + fontRenderer.getStringWidth(renderedText.substring(0, Math.min(Math.max(cursorPosition, selectionEnd), renderedText.length())));
-            int selColor = (theme.getTextInputFocusedBorderColor() & 0x00FFFFFF) | 0x88000000;
-            Gui.drawRect(startX, textY - 1, endX, textY + fontRenderer.FONT_HEIGHT + 1, selColor);
+            int selStart = Math.min(cursorRel, selEndRel);
+            int selEnd = Math.max(cursorRel, selEndRel);
+
+            selStart = MathHelper.clamp(selStart, 0, visibleText.length());
+            selEnd = MathHelper.clamp(selEnd, 0, visibleText.length());
+
+            if (selStart != selEnd) {
+                int startX = textX + fontRenderer.getStringWidth(visibleText.substring(0, selStart));
+                int endX = textX + fontRenderer.getStringWidth(visibleText.substring(0, selEnd));
+                int selColor = (theme.getTextInputFocusedBorderColor() & 0x00FFFFFF) | 0x88000000;
+                Gui.drawRect(startX, textY - 1, endX, textY + fontRenderer.FONT_HEIGHT + 1, selColor);
+            }
         }
     }
+
     @Override
     public boolean onMouseClick(int mouseX, int mouseY, int mouseButton) {
         if (!super.onMouseClick(mouseX, mouseY, mouseButton)) {
@@ -75,8 +130,11 @@ public class GuiTextInput extends GuiComponent {
             boolean clickedOnUs = isMouseOver(mouseX, mouseY) && enabled;
             if (clickedOnUs) {
                 this.requestFocus();
-                cursorPosition = text.length();
-                selectionEnd = cursorPosition;
+                int textX = getAbsoluteX() + 4;
+                int clickedRelX = mouseX - textX;
+                String visibleText = fontRenderer.trimStringToWidth(text.substring(lineScrollOffset), Math.max(1, width - 8));
+                int clickedCharOffset = fontRenderer.trimStringToWidth(visibleText, clickedRelX).length();
+                setCursorPosition(lineScrollOffset + clickedCharOffset);
                 return true;
             } else if (wasFocused) {
                 this.clearFocus();
@@ -84,12 +142,14 @@ public class GuiTextInput extends GuiComponent {
         }
         return false;
     }
+
     @Override
     public boolean onKeyPress(char typedChar, int keyCode) {
         if (!isFocused() || !enabled) return false;
         if (GuiScreen.isKeyComboCtrlA(keyCode)) {
             cursorPosition = text.length();
             selectionEnd = 0;
+            clampScrollOffset();
             return true;
         } else if (GuiScreen.isKeyComboCtrlC(keyCode)) {
             GuiScreen.setClipboardString(getSelectedText());
@@ -130,6 +190,7 @@ public class GuiTextInput extends GuiComponent {
                     if (cursorPosition > 0) cursorPosition--;
                     selectionEnd = cursorPosition;
                 }
+                clampScrollOffset();
                 return true;
             case Keyboard.KEY_RIGHT:
                 if (GuiScreen.isShiftKeyDown()) {
@@ -138,14 +199,17 @@ public class GuiTextInput extends GuiComponent {
                     if (cursorPosition < text.length()) cursorPosition++;
                     selectionEnd = cursorPosition;
                 }
+                clampScrollOffset();
                 return true;
             case Keyboard.KEY_HOME:
                 cursorPosition = 0;
                 if (!GuiScreen.isShiftKeyDown()) selectionEnd = 0;
+                clampScrollOffset();
                 return true;
             case Keyboard.KEY_END:
                 cursorPosition = text.length();
                 if (!GuiScreen.isShiftKeyDown()) selectionEnd = cursorPosition;
+                clampScrollOffset();
                 return true;
             default:
                 if (ChatAllowedCharacters.isAllowedCharacter(typedChar)) {
@@ -155,22 +219,29 @@ public class GuiTextInput extends GuiComponent {
                 return false;
         }
     }
+
     private String getSelectedText() {
         int min = Math.min(cursorPosition, selectionEnd);
         int max = Math.max(cursorPosition, selectionEnd);
         return text.substring(min, max);
     }
+
     private void writeText(String input) {
+        String sanitized = ChatAllowedCharacters.filterAllowedCharacters(input);
         int min = Math.min(cursorPosition, selectionEnd);
         int max = Math.max(cursorPosition, selectionEnd);
-        String result = text.substring(0, min) + input + text.substring(max);
-        if (result.length() > maxLength) {
-            result = result.substring(0, maxLength);
+        int spaceLeft = maxLength - (text.length() - (max - min));
+        if (spaceLeft > 0) {
+            if (sanitized.length() > spaceLeft) {
+                sanitized = sanitized.substring(0, spaceLeft);
+            }
+            text = text.substring(0, min) + sanitized + text.substring(max);
+            cursorPosition = min + sanitized.length();
+            selectionEnd = cursorPosition;
+            clampScrollOffset();
         }
-        text = result;
-        cursorPosition = min + input.length();
-        selectionEnd = cursorPosition;
     }
+
     private void deleteFromCursor(int dir) {
         if (cursorPosition != selectionEnd) {
             writeText("");
@@ -180,11 +251,47 @@ public class GuiTextInput extends GuiComponent {
             text = text.substring(0, cursorPosition - 1) + text.substring(cursorPosition);
             cursorPosition--;
             selectionEnd = cursorPosition;
+            clampScrollOffset();
         } else if (dir > 0 && cursorPosition < text.length()) {
             text = text.substring(0, cursorPosition) + text.substring(cursorPosition + 1);
+            clampScrollOffset();
         }
     }
+
     private void deleteWords(int dir) {
-        deleteFromCursor(dir);
+        if (cursorPosition != selectionEnd) {
+            writeText("");
+            return;
+        }
+        int wordBoundary = getNthWordFromCursor(dir);
+        if (wordBoundary != cursorPosition) {
+            int min = Math.min(cursorPosition, wordBoundary);
+            int max = Math.max(cursorPosition, wordBoundary);
+            text = text.substring(0, min) + text.substring(max);
+            cursorPosition = min;
+            selectionEnd = cursorPosition;
+            clampScrollOffset();
+        }
+    }
+
+    private int getNthWordFromCursor(int dir) {
+        int pos = cursorPosition;
+        if (dir < 0) {
+            while (pos > 0 && Character.isWhitespace(text.charAt(pos - 1))) {
+                pos--;
+            }
+            while (pos > 0 && !Character.isWhitespace(text.charAt(pos - 1))) {
+                pos--;
+            }
+        } else {
+            int len = text.length();
+            while (pos < len && !Character.isWhitespace(text.charAt(pos))) {
+                pos++;
+            }
+            while (pos < len && Character.isWhitespace(text.charAt(pos))) {
+                pos++;
+            }
+        }
+        return pos;
     }
 }

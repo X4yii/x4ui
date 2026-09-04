@@ -28,6 +28,8 @@ public class OpenALAudioSink implements IAudioSink {
     // Intermediate staging buffer for incoming PCM
     private ByteBuffer stagingBuffer;
 
+    private final java.util.Queue<Integer> freeBuffers = new java.util.ArrayDeque<>();
+
     @Override
     public void init(int sampleRate, int channels, int bitDepth) throws Exception {
         this.sampleRate = sampleRate;
@@ -49,8 +51,10 @@ public class OpenALAudioSink implements IAudioSink {
         }
         
         // Generate buffers
+        freeBuffers.clear();
         for (int i = 0; i < NUM_BUFFERS; i++) {
             bufferIds[i] = AL10.alGenBuffers();
+            freeBuffers.add(bufferIds[i]);
         }
         
         // Setup source parameters
@@ -81,41 +85,42 @@ public class OpenALAudioSink implements IAudioSink {
     }
     
     private void queueBuffer(ByteBuffer data) {
-        // Wait until a buffer is free
-        int processed;
-        while ((processed = AL10.alGetSourcei(sourceId, AL10.AL_BUFFERS_PROCESSED)) == 0) {
-            // If we haven't queued all buffers initially, just use one of the available ones
-            int queued = AL10.alGetSourcei(sourceId, AL10.AL_BUFFERS_QUEUED);
-            if (queued < NUM_BUFFERS) {
-                break;
-            }
-            
-            // Wait for OpenAL to finish playing a buffer
+        // First recycle any processed buffers
+        recycleProcessedBuffers();
+        
+        // Wait until at least one buffer is free
+        while (freeBuffers.isEmpty()) {
             try { Thread.sleep(2); } catch (InterruptedException ignored) {}
+            recycleProcessedBuffers();
             
-            // Check if starvation occurred
             if (playing && AL10.alGetSourcei(sourceId, AL10.AL_SOURCE_STATE) != AL10.AL_PLAYING) {
                 AL10.alSourcePlay(sourceId);
             }
         }
         
-        int bufferToUse;
-        if (processed > 0) {
-            bufferToUse = AL10.alSourceUnqueueBuffers(sourceId);
-            // Track time: We unqueued a buffer, so those samples were successfully played
-            int sizeBytes = AL10.alGetBufferi(bufferToUse, AL10.AL_SIZE);
-            totalSamplesProcessed += (sizeBytes / bytesPerSample);
-        } else {
-            // Find a free buffer (one that is not queued)
-            int queued = AL10.alGetSourcei(sourceId, AL10.AL_BUFFERS_QUEUED);
-            bufferToUse = bufferIds[queued];
-        }
+        Integer bufferToUse = freeBuffers.poll();
+        if (bufferToUse == null) return;
         
         AL10.alBufferData(bufferToUse, format, data, sampleRate);
         AL10.alSourceQueueBuffers(sourceId, bufferToUse);
         
         if (playing && AL10.alGetSourcei(sourceId, AL10.AL_SOURCE_STATE) != AL10.AL_PLAYING) {
             AL10.alSourcePlay(sourceId);
+        }
+    }
+
+    private void recycleProcessedBuffers() {
+        int processed = AL10.alGetSourcei(sourceId, AL10.AL_BUFFERS_PROCESSED);
+        while (processed > 0) {
+            int unqueued = AL10.alSourceUnqueueBuffers(sourceId);
+            if (unqueued != 0 && AL10.alGetError() == AL10.AL_NO_ERROR) {
+                int sizeBytes = AL10.alGetBufferi(unqueued, AL10.AL_SIZE);
+                if (bytesPerSample > 0) {
+                    totalSamplesProcessed += (sizeBytes / bytesPerSample);
+                }
+                freeBuffers.add(unqueued);
+            }
+            processed--;
         }
     }
 
@@ -158,6 +163,10 @@ public class OpenALAudioSink implements IAudioSink {
             AL10.alSourceUnqueueBuffers(sourceId);
         }
         totalSamplesProcessed = 0;
+        freeBuffers.clear();
+        for (int id : bufferIds) {
+            freeBuffers.add(id);
+        }
         if (stagingBuffer != null) {
             stagingBuffer.clear();
         }

@@ -42,9 +42,20 @@ public abstract class GuiBaseScreen extends GuiScreen {
     public void initGui() {
         super.initGui();
         currentScaleFactor = new net.minecraft.client.gui.ScaledResolution(mc).getScaleFactor();
-        rootPanel = new GuiPanel(0, 0, width, height);
-        initComponents();
+        if (rootPanel == null) {
+            rootPanel = new GuiPanel(0, 0, width, height);
+            initComponents();
+        } else {
+            rootPanel.setWidth(width);
+            rootPanel.setHeight(height);
+            rootPanel.requestLayout();
+            onScreenResize(width, height);
+        }
     }
+
+    protected void onScreenResize(int newWidth, int newHeight) {
+    }
+
     protected abstract void initComponents();
     @Override
     public void drawScreen(int mouseX, int mouseY, float partialTicks) {
@@ -124,6 +135,7 @@ public abstract class GuiBaseScreen extends GuiScreen {
         if (rootPanel != null) {
             rootPanel.destroy();
         }
+        com.x4yi.x4ui.client.gui.utils.ScissorHelper.clear();
     }
     public void closeScreen() {
         mc.displayGuiScreen(parentScreen);

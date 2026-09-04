@@ -39,4 +39,8 @@ public class ScissorHelper {
             GL11.glScissor(parent.x, parent.y, parent.width, parent.height);
         }
     }
+    public static void clear() {
+        scissorStack.clear();
+        GL11.glDisable(GL11.GL_SCISSOR_TEST);
+    }
 }

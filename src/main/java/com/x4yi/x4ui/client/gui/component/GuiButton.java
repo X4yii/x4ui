@@ -17,7 +17,7 @@ public class GuiButton extends GuiComponent {
     protected void renderSelf(int mouseX, int mouseY, float partialTicks) {
         boolean hovered = isMouseOver(mouseX, mouseY) && enabled;
         float dt = com.x4yi.x4ui.client.gui.base.GuiBaseScreen.deltaTime;
-        float speed = 10f * dt;
+        float speed = Math.min(1.0f, 10f * dt);
         if (hovered) {
             hoverLerp = Math.min(1.0f, hoverLerp + speed);
         } else {
@@ -32,7 +32,7 @@ public class GuiButton extends GuiComponent {
         drawRect(absX, absY, absX + width, absY + height, currentBg);
         drawBorder(absX, absY, absX + width, absY + height, currentBorder);
         int currentTextColor = enabled ? theme.getTextColor() : theme.getDisabledTextColor();
-        drawCenteredString(text, absX + width / 2, absY + (height - 8) / 2, currentTextColor);
+        drawCenteredString(text, absX + width / 2, absY + (height - fontRenderer.FONT_HEIGHT) / 2, currentTextColor);
     }
     @Override
     public boolean onMouseClick(int mouseX, int mouseY, int mouseButton) {

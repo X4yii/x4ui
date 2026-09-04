@@ -95,8 +95,11 @@ public class GuiScrollPanel extends GuiPanel {
         int scissorW = width * scale;
         int scissorH = height * scale;
         com.x4yi.x4ui.client.gui.utils.ScissorHelper.pushScissor(scissorX, scissorY, scissorW, scissorH);
-        super.renderChildren(mouseX, mouseY, partialTicks);
-        com.x4yi.x4ui.client.gui.utils.ScissorHelper.popScissor();
+        try {
+            super.renderChildren(mouseX, mouseY, partialTicks);
+        } finally {
+            com.x4yi.x4ui.client.gui.utils.ScissorHelper.popScissor();
+        }
         if (maxScrollY > 0) {
             com.x4yi.x4ui.client.gui.utils.ITheme theme = getTheme();
             int trackX = absX + width - 5;

@@ -31,7 +31,10 @@ public class GuiImage extends GuiComponent {
     }
     public GuiImage setUrl(String url) {
         this.url = url;
-        String sanitizedUrl = url.replaceAll("[^a-zA-Z0-9]", "_");
+        String sanitizedUrl = url.replaceAll("[^a-zA-Z0-9_.-]", "_").toLowerCase(java.util.Locale.ROOT);
+        if (sanitizedUrl.length() > 64) {
+            sanitizedUrl = Integer.toHexString(url.hashCode()) + "_" + sanitizedUrl.substring(sanitizedUrl.length() - 32);
+        }
         this.texture = new ResourceLocation("x4ui", "downloaded_images/" + sanitizedUrl);
         ITextureObject existing = mc.getTextureManager().getTexture(texture);
         if (existing == null) {
