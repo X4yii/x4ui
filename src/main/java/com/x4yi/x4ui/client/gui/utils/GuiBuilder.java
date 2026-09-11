@@ -1,6 +1,7 @@
 package com.x4yi.x4ui.client.gui.utils;
 import com.x4yi.x4ui.client.gui.component.GuiButton;
 import com.x4yi.x4ui.client.gui.component.GuiComponent;
+import com.x4yi.x4ui.client.gui.component.GuiImage;
 import com.x4yi.x4ui.client.gui.component.GuiLabel;
 import com.x4yi.x4ui.client.gui.component.GuiPanel;
 import com.x4yi.x4ui.client.gui.component.GuiScrollPanel;
@@ -11,9 +12,14 @@ import com.x4yi.x4ui.client.gui.component.GuiSprite;
 import com.x4yi.x4ui.client.gui.component.GuiTextInput;
 import com.x4yi.x4ui.client.gui.component.GuiToggle;
 import com.x4yi.x4ui.client.gui.component.GuiDropdown;
+import com.x4yi.x4ui.client.gui.component.image.NineSliceConfig;
 import com.x4yi.x4ui.client.gui.component.slider.GuiSliderInt;
 import com.x4yi.x4ui.client.gui.component.slider.GuiSliderFloat;
 import com.x4yi.x4ui.client.gui.component.slider.GuiSliderDouble;
+import com.x4yi.x4ui.client.gui.component.sprite.ISpriteSource;
+import com.x4yi.x4ui.client.gui.component.sprite.LoopMode;
+import com.x4yi.x4ui.client.gui.component.sprite.SpriteSheetSource;
+import com.x4yi.x4ui.client.gui.component.sprite.SequenceSource;
 import com.x4yi.x4ui.client.gui.component.layout.FlexDirection;
 import com.x4yi.x4ui.client.gui.base.GuiBaseContainer;
 import com.x4yi.x4ui.common.State;
@@ -50,8 +56,29 @@ public class GuiBuilder<T extends GuiComponent> {
     public static GuiBuilder<GuiSlot> createSlot(Slot slot, GuiBaseContainer container) {
         return new GuiBuilder<>(new GuiSlot(slot, container));
     }
+    public static GuiBuilder<GuiImage> createImage() {
+        return new GuiBuilder<>(new GuiImage(0, 0, 100, 100));
+    }
+    public static GuiBuilder<GuiImage> createImage(ResourceLocation texture) {
+        return new GuiBuilder<>(new GuiImage(0, 0, 100, 100, texture));
+    }
+    public static GuiBuilder<GuiImage> createImage(String url) {
+        return new GuiBuilder<>(new GuiImage(0, 0, 100, 100, url));
+    }
+    public static GuiBuilder<GuiSprite> createSprite(ISpriteSource source) {
+        return new GuiBuilder<>(new GuiSprite(0, 0, 0, 0, source));
+    }
+    public static GuiBuilder<GuiSprite> createSpriteSheet(ResourceLocation texture, int texWidth, int texHeight, int frameWidth, int frameHeight) {
+        return new GuiBuilder<>(GuiSprite.fromSheet(0, 0, frameWidth, frameHeight, texture, texWidth, texHeight, frameWidth, frameHeight));
+    }
+    public static GuiBuilder<GuiSprite> createSpriteSheet(ResourceLocation texture, int texWidth, int texHeight, int frameWidth, int frameHeight, int totalFrames) {
+        return new GuiBuilder<>(GuiSprite.fromSheet(0, 0, frameWidth, frameHeight, texture, texWidth, texHeight, frameWidth, frameHeight, totalFrames));
+    }
+    public static GuiBuilder<GuiSprite> createSpriteSequence(ResourceLocation[] frames, int frameWidth, int frameHeight) {
+        return new GuiBuilder<>(GuiSprite.fromSequence(0, 0, frameWidth, frameHeight, frames, frameWidth, frameHeight));
+    }
     public static GuiBuilder<GuiSprite> createSprite(ResourceLocation texture, int textureWidth, int textureHeight) {
-        return new GuiBuilder<>(new GuiSprite(0, 0, 0, 0, texture, textureWidth, textureHeight));
+        return new GuiBuilder<>(GuiSprite.fromSheet(0, 0, 0, 0, texture, textureWidth, textureHeight, textureWidth, textureHeight));
     }
     public static GuiBuilder<GuiSliderInt> createSliderInt(State<Integer> state, int min, int max, int step) {
         return new GuiBuilder<>(new GuiSliderInt(0, 0, 100, 10, state, min, max, step));
@@ -104,7 +131,6 @@ public class GuiBuilder<T extends GuiComponent> {
         component.setLayer(layer);
         return this;
     }
-
     public GuiBuilder<T> flexDirection(FlexDirection direction) {
         if (component instanceof GuiPanel) {
             ((GuiPanel) component).setFlexDirection(direction);
@@ -206,8 +232,44 @@ public class GuiBuilder<T extends GuiComponent> {
         return this;
     }
     public GuiBuilder<T> sliceSize(int size) {
+        if (component instanceof GuiImage) {
+            ((GuiImage) component).withNineSlice(size, 256, 256);
+        }
+        return this;
+    }
+    public GuiBuilder<T> nineSlice(NineSliceConfig config) {
+        if (component instanceof GuiImage) {
+            ((GuiImage) component).withNineSlice(config);
+        }
+        return this;
+    }
+    public GuiBuilder<T> nineSlice(int sliceSize, int textureWidth, int textureHeight) {
+        if (component instanceof GuiImage) {
+            ((GuiImage) component).withNineSlice(sliceSize, textureWidth, textureHeight);
+        }
+        return this;
+    }
+    public GuiBuilder<T> fps(float fps) {
         if (component instanceof GuiSprite) {
-            ((GuiSprite) component).setSliceSize(size);
+            ((GuiSprite) component).setFPS(fps);
+        }
+        return this;
+    }
+    public GuiBuilder<T> loopMode(LoopMode mode) {
+        if (component instanceof GuiSprite) {
+            ((GuiSprite) component).setLoopMode(mode);
+        }
+        return this;
+    }
+    public GuiBuilder<T> flipX(boolean flip) {
+        if (component instanceof GuiSprite) {
+            ((GuiSprite) component).setFlipX(flip);
+        }
+        return this;
+    }
+    public GuiBuilder<T> flipY(boolean flip) {
+        if (component instanceof GuiSprite) {
+            ((GuiSprite) component).setFlipY(flip);
         }
         return this;
     }

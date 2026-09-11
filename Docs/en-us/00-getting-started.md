@@ -1,15 +1,15 @@
 # 00 - Getting Started
 
-X4UI is a retained-mode GUI framework for Minecraft Forge 1.12.2. It replaces vanilla's immediate-mode `GuiScreen` rendering with a component tree architecture, flexbox layouts, event bubbling, reactive state binding, and theme support.
+X4UI is a modern, retained-mode user interface framework for Minecraft Forge 1.12.2. It provides a complete component tree architecture, responsive flexbox layout managers, an immediate graphics abstraction layer (`IGraphics`), hardware-accelerated TrueType/OpenType vector typography (`IFont`), hierarchical event propagation, reactive state binding (`State<T>`), smooth animations, and decoupled theming.
 
 ## Requirements
 
-- Minecraft Forge 1.12.2 (`1.12.2-14.23.5.2847`)
-- Java 8
+- Minecraft Forge 1.12.2 (`1.12.2-14.23.5.2847` or later)
+- Java 8 (OpenJDK or Oracle JDK)
 
 ## Installation
 
-Add the X4UI dependency to `build.gradle` using one of the following repositories:
+Add the X4UI dependency to your `build.gradle` using any of the following repositories:
 
 ### Modrinth (Recommended)
 ```gradle
@@ -18,7 +18,7 @@ repositories {
 }
 
 dependencies {
-    deobfCompile "maven.modrinth:x4ui:1.0b4"
+    deobfCompile "maven.modrinth:x4ui:1.0b5"
 }
 ```
 
@@ -29,7 +29,6 @@ repositories {
 }
 
 dependencies {
-    // Replace FILE_ID with the actual file ID from the CurseForge project page for latest release.
     deobfCompile "curse.maven:x4ui-PROJECT_ID:FILE_ID"
 }
 ```
@@ -41,36 +40,48 @@ repositories {
 }
 
 dependencies {
-    deobfCompile "com.github.x4yi:X4UI:1.0b4"
+    deobfCompile "com.github.x4yi:X4UI:1.0b5"
 }
 ```
 
 ## Package Structure
 
-All X4UI classes reside under `com.x4yi.x4ui`. The relevant packages for client-side GUI development are:
+All X4UI classes reside under `com.x4yi.x4ui`. The architecture cleanly isolates public APIs from internal implementations:
 
 | Package | Purpose |
 |---------|---------|
-| `com.x4yi.x4ui.client.gui.base` | Abstract screen base classes (`GuiBaseScreen`, `GuiBaseContainer`) |
-| `com.x4yi.x4ui.client.gui.component` | All UI components (`GuiPanel`, `GuiButton`, `GuiLabel`, etc.) |
-| `com.x4yi.x4ui.client.gui.component.layout` | Layout engines (`FlexLayout`, `FlexDirection`) |
-| `com.x4yi.x4ui.client.gui.component.slider` | Typed sliders (`GuiSliderInt`, `GuiSliderFloat`, `GuiSliderDouble`) |
-| `com.x4yi.x4ui.client.gui.utils` | Utilities (`GuiBuilder`, `ITheme`, `DefaultTheme`, `Insets`) |
-| `com.x4yi.x4ui.common` | Shared state primitives (`State<T>`) |
-| `com.x4yi.x4ui.api.client.resource` | Remote asset management (`RemoteResourceManager`) |
+| `com.x4yi.x4ui.api.client.gui` | Immediate rendering abstraction (`IGraphics`) |
+| `com.x4yi.x4ui.impl.client.gui` | Low-level OpenGL graphics implementation (`GLGraphics`) |
+| `com.x4yi.x4ui.api.client.font` | Typography abstraction interface (`IFont`) |
+| `com.x4yi.x4ui.impl.client.font` | Vector rasterizer (`TrueTypeFont`), registry (`FontRegistry`) |
+| `com.x4yi.x4ui.client.gui.base` | Abstract screen bases (`GuiBaseScreen`, `GuiBaseContainer`) |
+| `com.x4yi.x4ui.client.gui.component` | UI widgets (`GuiPanel`, `GuiButton`, `GuiLabel`, `GuiImage`, etc.) |
+| `com.x4yi.x4ui.client.gui.component.layout` | Layout managers (`FlexLayout`, `FlexDirection`) |
+| `com.x4yi.x4ui.client.gui.component.slider` | Modular typed sliders (`GuiSliderInt`, `GuiSliderFloat`, `GuiSliderDouble`) |
+| `com.x4yi.x4ui.client.gui.component.sprite` | 2D animation engine (`ISpriteSource`, `SpriteSheetSource`, `SequenceSource`) |
+| `com.x4yi.x4ui.client.gui.component.image` | 9-slice border configurations (`NineSliceConfig`) |
+| `com.x4yi.x4ui.client.gui.overlay` | Non-intrusive screen overlays (`GuiOverlayManager`, `OverlayDockManager`) |
+| `com.x4yi.x4ui.client.gui.compat.jei` | Native JEI integration (`JeiPlugin`) |
+| `com.x4yi.x4ui.client.gui.bus` | Reactive inter-mod state bus (`UIStateBus`) |
+| `com.x4yi.x4ui.client.gui.utils` | Utilities (`GuiBuilder`, `ITheme`, `DefaultTheme`, `ThemeRegistry`, `Insets`) |
+| `com.x4yi.x4ui.common` | Server-safe reactive state primitives (`State<T>`) |
+| `com.x4yi.x4ui.common.sync` | Container window property synchronization (`NetworkSyncHelper`) |
+| `com.x4yi.x4ui.proxy` | Strict sided proxy separation (`ClientProxy`, `CommonProxy`) |
 
-## Creating a Standalone Screen
+---
 
-Extend `GuiBaseScreen` for screens that do not interact with inventory containers (e.g., settings menus, info panels, video players).
+## Creating a Standalone Screen (`GuiBaseScreen`)
+
+Extend `GuiBaseScreen` for screens that do not interact with inventory containers (e.g., configuration menus, dialogs, media players):
 
 ```java
 package com.example.mymod.client.gui;
 
 import com.x4yi.x4ui.client.gui.base.GuiBaseScreen;
-import com.x4yi.x4ui.client.gui.component.GuiPanel;
-import com.x4yi.x4ui.client.gui.component.GuiLabel;
 import com.x4yi.x4ui.client.gui.component.GuiButton;
+import com.x4yi.x4ui.client.gui.component.GuiLabel;
 import com.x4yi.x4ui.client.gui.component.layout.FlexDirection;
+import com.x4yi.x4ui.client.gui.utils.Insets;
 import net.minecraft.client.gui.GuiScreen;
 
 public class MySettingsScreen extends GuiBaseScreen {
@@ -81,58 +92,43 @@ public class MySettingsScreen extends GuiBaseScreen {
 
     @Override
     protected void initComponents() {
+        // rootPanel is automatically created spanning the full display window
         rootPanel.setFlexDirection(FlexDirection.VERTICAL);
-        rootPanel.setGap(5);
+        rootPanel.setGap(8);
+        rootPanel.setPadding(new Insets(16));
 
-        rootPanel.addChild(new GuiLabel(0, 0, "Settings", 0xFFFFFFFF).setCentered(true));
+        rootPanel.addChild(new GuiLabel(0, 0, "Main Settings", 0xFFFFFFFF)
+            .setCentered(true));
 
-        rootPanel.addChild(new GuiButton(0, 0, 150, 20, "Option A", () -> {
-            System.out.println("Option A clicked");
+        rootPanel.addChild(new GuiButton(0, 0, 160, 24, "Save Changes", () -> {
+            System.out.println("Settings saved");
         }));
 
-        rootPanel.addChild(new GuiButton(0, 0, 150, 20, "Option B", () -> {
-            System.out.println("Option B clicked");
-        }));
-
-        rootPanel.addChild(new GuiButton(0, 0, 150, 20, "Close", () -> this.closeScreen()));
+        rootPanel.addChild(new GuiButton(0, 0, 160, 24, "Close", this::closeScreen));
     }
 }
 ```
 
-Key points:
-- `rootPanel` is created automatically in `initGui()` and fills the entire screen (`width` x `height`).
-- `initComponents()` is called after `rootPanel` is created. All component setup happens here.
-- `closeScreen()` returns to the parent screen passed in the constructor.
-
 ### Opening the Screen
 
 ```java
-Minecraft.getMinecraft().displayGuiScreen(new MySettingsScreen(Minecraft.getMinecraft().currentScreen));
+Minecraft.getMinecraft().displayGuiScreen(
+    new MySettingsScreen(Minecraft.getMinecraft().currentScreen)
+);
 ```
 
-### Overriding Background Rendering
+---
 
-Override `drawBackground` to render custom backgrounds before the component tree:
+## Creating an Inventory Container Screen (`GuiBaseContainer`)
 
-```java
-@Override
-protected void drawBackground(int mouseX, int mouseY, float partialTicks) {
-    drawDefaultBackground();
-}
-```
-
-## Creating a Container Screen
-
-Extend `GuiBaseContainer` for screens that wrap a Minecraft `Container` (e.g., chest GUIs, crafting tables, custom inventories).
+Extend `GuiBaseContainer` for screens bound to a Minecraft `Container` (chest GUIs, machine inventories, crafting tables):
 
 ```java
 package com.example.mymod.client.gui;
 
 import com.x4yi.x4ui.client.gui.base.GuiBaseContainer;
-import com.x4yi.x4ui.client.gui.component.GuiPanel;
 import com.x4yi.x4ui.client.gui.component.GuiLabel;
 import com.x4yi.x4ui.client.gui.component.GuiSlot;
-import com.x4yi.x4ui.client.gui.component.layout.FlexDirection;
 import net.minecraft.inventory.Container;
 import net.minecraft.inventory.Slot;
 
@@ -144,11 +140,9 @@ public class MyContainerScreen extends GuiBaseContainer {
 
     @Override
     protected void initComponents() {
-        rootPanel.setFlexDirection(FlexDirection.VERTICAL);
-        rootPanel.setGap(2);
+        rootPanel.addChild(new GuiLabel(8, 6, "Machine Inventory", 0xFF404040));
 
-        rootPanel.addChild(new GuiLabel(0, 0, "My Inventory", 0xFFFFFFFF).setCentered(true));
-
+        // GuiSlot automatically mirrors screen coordinates with the vanilla Slot
         for (Slot slot : inventorySlots.inventorySlots) {
             rootPanel.addChild(new GuiSlot(slot, this));
         }
@@ -156,94 +150,53 @@ public class MyContainerScreen extends GuiBaseContainer {
 }
 ```
 
-Key points:
-- The constructor receives a `Container` instance, passed to `GuiContainer`'s super constructor.
-- `getGuiLeft()` and `getGuiTop()` expose the vanilla container offsets for slot positioning.
-- `GuiSlot` automatically syncs its position with the vanilla `Slot.xPos`/`Slot.yPos` each tick.
-- JEI recipe areas can be registered via `getJeiRecipeAreas()`.
+---
 
-## Using the Builder API
+## Fluent Methods on `GuiComponent`
 
-`GuiBuilder<T>` provides a fluent API for constructing components without verbose constructors:
+In X4UI r1.0b5, components expose chainable builder methods directly on `GuiComponent`:
 
 ```java
-import com.x4yi.x4ui.client.gui.utils.GuiBuilder;
-import com.x4yi.x4ui.client.gui.component.layout.FlexDirection;
-import com.x4yi.x4ui.common.State;
+GuiButton btn = new GuiButton(0, 0, 120, 20, "Confirm", this::onConfirm)
+    .withPosition(10, 20)
+    .withSize(140, 24)
+    .withMargin(new Insets(4))
+    .withLayer(5)
+    .withPercentWidth(0.8f); // 80% of parent width
+```
 
-// Panel with flex layout
+Static declarative creation is also available via `GuiBuilder`:
+
+```java
 GuiPanel panel = GuiBuilder.createPanel()
     .position(10, 10)
     .size(200, 300)
     .flexDirection(FlexDirection.VERTICAL)
     .gap(5)
-    .padding(new Insets(10))
-    .build();
-
-// Button with tooltip and click handler
-GuiButton btn = GuiBuilder.createButton("Save")
-    .position(0, 0)
-    .size(120, 25)
-    .tooltip("Save configuration")
-    .onClick(() -> System.out.println("Saved!"))
-    .build();
-
-// Label bound to a reactive State
-State<String> nameState = new State<>("Player");
-GuiLabel label = GuiBuilder.createLabel("")
-    .position(0, 0)
-    .bindLabelText(nameState)
-    .build();
-
-// Slider with reactive state
-State<Integer> volume = new State<>(50);
-GuiSliderInt slider = GuiBuilder.createSliderInt(volume, 0, 100, 5)
-    .position(0, 0)
-    .size(150, 15)
+    .padding(new Insets(8))
     .build();
 ```
 
-## Applying a Theme
+---
 
-Themes control all visual styles (colors, borders, tooltips). Apply a theme to the root panel to style the entire screen:
+## What to Avoid (Pitfalls & Anti-Patterns)
 
-```java
-import com.x4yi.x4ui.client.gui.utils.DefaultTheme;
+> [!CAUTION]
+> **1. NEVER import `client.gui` or `impl.client` classes in common or server code.**
+> All X4UI graphical components are `@SideOnly(Side.CLIENT)`. Using them in common packages will crash dedicated servers with `ClassNotFoundException`. In common code, only use `com.x4yi.x4ui.common.State<T>`.
 
-@Override
-protected void initComponents() {
-    setTheme(DefaultTheme.INSTANCE);
-    // ... add components
-}
-```
+> [!WARNING]
+> **2. NEVER execute raw OpenGL calls (`GL11`, `GlStateManager`, `Tessellator`).**
+> Always use `IGraphics` drawing methods. Emitting raw OpenGL vertices disrupts X4UI's internal rendering state (matrices, scissor bounds, etc).
 
-Custom themes implement `ITheme` and can be applied per-component or per-subtree:
+> [!WARNING]
+> **3. NEVER hardcode absolute positions exceeding 320 px without testing in GUI Scale 4.**
+> Always encapsulate tall layouts in a `GuiScrollPanel` and use relative sizing (`withPercentWidth`) to support smaller resolutions.
 
-```java
-import com.x4yi.x4ui.client.gui.utils.ITheme;
+> [!IMPORTANT]
+> **4. NEVER create new `TrueTypeFont` instances repeatedly or per tick.**
+> Register fonts once in `FontRegistry` at load time. Doing this during rendering will severely impact performance.
 
-ITheme myTheme = new ITheme() {
-    @Override public int getPrimaryColor() { return 0xFFFF5722; }
-    @Override public int getBackgroundColor() { return 0xFF263238; }
-    @Override public int getTextColor() { return 0xFFFFFFFF; }
-    // ... implement all methods
-};
-
-panel.setTheme(myTheme);
-```
-
-## Sending Actions to the Server
-
-For client-to-server communication, set an `IGuiActionSender` on the screen:
-
-```java
-import com.x4yi.x4ui.common.sync.IGuiActionSender;
-import net.minecraft.nbt.NBTTagCompound;
-
-IGuiActionSender sender = (actionId, data) -> {
-    // Send network packet to server
-    MyModNetwork.CHANNEL.sendToServer(new MyPacket(actionId, data));
-};
-
-setActionSender(sender);
-```
+> [!IMPORTANT]
+> **5. NEVER leave manual `State<T>` listeners uncleaned.**
+> Prefer `component.bindState(state, callback)` over `state.addListener()`. This ensures the listener is automatically unbound upon component destruction.

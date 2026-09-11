@@ -9,19 +9,45 @@ import java.util.HashMap;
 import java.util.Map;
 public class StateContainerListener implements IContainerListener {
     private final Map<Integer, java.util.List<java.util.function.IntConsumer>> propertyListeners = new HashMap<>();
-    
     public void bindProperty(int id, State<Integer> state) {
         propertyListeners.computeIfAbsent(id, k -> new java.util.ArrayList<>()).add(state::set);
     }
-
     public void bindBooleanProperty(int id, State<Boolean> state) {
         propertyListeners.computeIfAbsent(id, k -> new java.util.ArrayList<>()).add(val -> state.set(val != 0));
     }
-
     public void bindFloatProperty(int id, State<Float> state, float scale) {
         propertyListeners.computeIfAbsent(id, k -> new java.util.ArrayList<>()).add(val -> state.set(val / scale));
     }
-
+    public void bind32BitProperty(int lowId, int highId, State<Integer> state) {
+        Property32Binding binding = new Property32Binding(lowId, highId, state::set);
+        propertyListeners.computeIfAbsent(lowId, k -> new java.util.ArrayList<>()).add(binding::updateLow);
+        propertyListeners.computeIfAbsent(highId, k -> new java.util.ArrayList<>()).add(binding::updateHigh);
+    }
+    public void bindFloat32Property(int lowId, int highId, State<Float> state) {
+        Property32Binding binding = new Property32Binding(lowId, highId, bits -> state.set(Float.intBitsToFloat(bits)));
+        propertyListeners.computeIfAbsent(lowId, k -> new java.util.ArrayList<>()).add(binding::updateLow);
+        propertyListeners.computeIfAbsent(highId, k -> new java.util.ArrayList<>()).add(binding::updateHigh);
+    }
+    private static class Property32Binding {
+        private final int lowId;
+        private final int highId;
+        private final java.util.function.IntConsumer consumer;
+        private int currentLow;
+        private int currentHigh;
+        Property32Binding(int lowId, int highId, java.util.function.IntConsumer consumer) {
+            this.lowId = lowId;
+            this.highId = highId;
+            this.consumer = consumer;
+        }
+        void updateLow(int val) {
+            this.currentLow = val & 0xFFFF;
+            consumer.accept((currentHigh << 16) | currentLow);
+        }
+        void updateHigh(int val) {
+            this.currentHigh = val & 0xFFFF;
+            consumer.accept((currentHigh << 16) | currentLow);
+        }
+    }
     @Override
     public void sendWindowProperty(Container containerIn, int varToUpdate, int newValue) {
         java.util.List<java.util.function.IntConsumer> listeners = propertyListeners.get(varToUpdate);
@@ -34,4 +60,7 @@ public class StateContainerListener implements IContainerListener {
     @Override public void sendAllContents(Container containerToSend, NonNullList<ItemStack> itemsList) {}
     @Override public void sendSlotContents(Container containerToSend, int slotInd, ItemStack stack) {}
     @Override public void sendAllWindowProperties(Container containerIn, IInventory inventory) {}
+    public void clear() {
+        propertyListeners.clear();
+    }
 }

@@ -1,196 +1,127 @@
-# 03 - Redes y Sincronización con el Servidor
+# 03 - Redes, Sidedness y Sincronización Servidor/Cliente
 
-Los componentes de X4UI son estrictamente del lado del cliente (`@SideOnly(Side.CLIENT)`). Las clases de X4UI nunca deben ser referenciadas desde código de `common` o del servidor, ya que esto causa `ClassNotFoundException` en servidores dedicados.
+Este documento detalla la arquitectura de separación de lados (*sidedness*), compatibilidad de conexión asimétrica y sincronización reactiva de datos entre el servidor dedicado y las pantallas de cliente de X4UI.
 
-> **Nota:** El sistema de sincronización servidor-cliente se encuentra en una fase muy temprana de desarrollo. La API de `NetworkSyncHelper` y `StateContainerListener` puede cambiar sin previo aviso.
+---
 
-## Abrir una GUI desde el Servidor
+## 1. Arquitectura de Sidedness (@SidedProxy)
 
-Para abrir una pantalla X4UI desde el servidor, use el sistema de red `SimpleImpl` de Forge para enviar un paquete que instruya al cliente a abrir la GUI.
+X4UI implementa separación estricta mediante proxies de Forge:
+- **`ClientProxy`:** Inicializa servicios de renderizado (`IGraphics`), rasterización de fuentes (`FontRegistry`), servicios multimedia (`MediaService`, OpenAL) y registros de superposición (`GuiOverlayManager`).
+- **`CommonProxy`:** Punto de entrada en servidor dedicado. No carga ninguna clase de OpenGL, LWJGL ni interfaz visual.
 
-### 1. Definir el Paquete
+### Conexión Server-Optional (@NetworkCheckHandler)
+En X4UI r1.0b5, los clientes pueden ingresar a cualquier servidor (vanilla o modded) sin requerir que el servidor tenga instalado X4UI:
 
 ```java
-import io.netty.buffer.ByteBuf;
-import net.minecraftforge.fml.common.network.simpleimpl.IMessage;
-
-public class PacketOpenUI implements IMessage {
-    public String screenId;
-
-    public PacketOpenUI() {}
-
-    public PacketOpenUI(String screenId) {
-        this.screenId = screenId;
-    }
-
-    @Override
-    public void fromBytes(ByteBuf buf) {
-        int length = buf.readInt();
-        byte[] bytes = new byte[length];
-        buf.readBytes(bytes);
-        this.screenId = new String(bytes);
-    }
-
-    @Override
-    public void toBytes(ByteBuf buf) {
-        byte[] bytes = this.screenId.getBytes();
-        buf.writeInt(bytes.length);
-        buf.writeBytes(bytes);
-    }
+@NetworkCheckHandler
+public boolean checkModVersion(Map<String, String> mods, Side side) {
+    // Retorna true sin exigir presencia en servidor
+    return true;
 }
 ```
 
-### 2. Manejador del Lado del Cliente
+---
 
-El manejador se ejecuta exclusivamente en el cliente. Las clases de X4UI pueden ser referenciadas aquí.
+## 2. Apertura de Pantallas desde el Servidor
+
+Las pantallas de X4UI residen exclusivamente en el cliente. Para abrir una interfaz desde el servidor (por ejemplo, al interactuar con un bloque o comando), envíe un paquete estándar de Forge al cliente y programe la apertura en el hilo del cliente:
 
 ```java
-import net.minecraft.client.Minecraft;
-import net.minecraftforge.fml.common.network.simpleimpl.IMessage;
-import net.minecraftforge.fml.common.network.simpleimpl.IMessageHandler;
-import net.minecraftforge.fml.common.network.simpleimpl.MessageContext;
-
-public class PacketOpenUIHandler implements IMessageHandler<PacketOpenUI, IMessage> {
-    @Override
-    public IMessage onMessage(PacketOpenUI message, MessageContext ctx) {
-        Minecraft.getMinecraft().addScheduledTask(() -> {
-            Minecraft.getMinecraft().displayGuiScreen(
-                new MyCustomScreen(Minecraft.getMinecraft().currentScreen)
-            );
-        });
-        return null;
-    }
+// En el MessageHandler del cliente (Side.CLIENT)
+@Override
+public IMessage onMessage(PacketOpenUI message, MessageContext ctx) {
+    Minecraft.getMinecraft().addScheduledTask(() -> {
+        Minecraft.getMinecraft().displayGuiScreen(
+            new MyCustomScreen(Minecraft.getMinecraft().currentScreen)
+        );
+    });
+    return null;
 }
 ```
 
-### 3. Registrar el Paquete
+---
 
-Registre durante `FMLPreInitializationEvent`:
+## 3. Sincronización de Contenedores (`NetworkSyncHelper`)
 
-```java
-import net.minecraftforge.fml.common.network.NetworkRegistry;
+Para sincronizar datos continuos de máquinas o inventarios (progreso, combustible, energía) sin crear canales de red propietarios, X4UI aprovecha el pipeline de propiedades de `Container` de Minecraft:
 
-public static final SimpleNetworkWrapper CHANNEL = NetworkRegistry.INSTANCE.newSimpleChannel("mymod");
-
-@EventHandler
-public void preInit(FMLPreInitializationEvent event) {
-    CHANNEL.registerMessage(
-        PacketOpenUIHandler.class,
-        PacketOpenUI.class,
-        0,
-        Side.CLIENT
-    );
-}
-```
-
-### 4. Enviar desde el Servidor
-
-```java
-MyModNetwork.CHANNEL.sendTo(new PacketOpenUI("settings"), (EntityPlayerMP) player);
-```
-
-## Sincronización de Datos Servidor-a-Cliente (`State<T>` + Propiedades de Container)
-
-El sistema `State<T>` de X4UI puede sincronizarse del servidor al cliente usando el mecanismo de propiedades `Container` de Minecraft. Esto es útil para sincronizar datos relacionados con inventarios.
-
-### StateContainerListener
-
-`StateContainerListener` implementa `IContainerListener` y vincula IDs de propiedades de container a objetos `State`.
-
-```java
-import com.x4yi.x4ui.common.State;
-import com.x4yi.x4ui.common.sync.StateContainerListener;
-
-State<Integer> progress = new State<>(0);
-State<Boolean> isActive = new State<>(false);
-
-StateContainerListener listener = new StateContainerListener();
-listener.bindProperty(0, progress);          // Propiedad de container 0 -> Estado Integer
-listener.bindBooleanProperty(1, isActive);   // Propiedad de container 1 -> Estado Boolean
-
-container.addListener(listener);
-```
-
-### NetworkSyncHelper
-
-`NetworkSyncHelper` proporciona métodos estáticos de conveniencia que gestionan automáticamente instancias de `StateContainerListener` por `Container`. Usa un `WeakHashMap` para prevenir fugas de memoria.
-
-```java
-import com.x4yi.x4ui.common.State;
-import com.x4yi.x4ui.common.sync.NetworkSyncHelper;
-
-State<Integer> fuelLevel = new State<>(0);
-State<Boolean> isBurning = new State<>(false);
-State<Float> temperature = new State<>(0f);
-
-// Vincular propiedades de container a objetos State
-NetworkSyncHelper.bindContainerPropertyToState(container, 0, fuelLevel);
-NetworkSyncHelper.bindContainerPropertyToBoolean(container, 1, isBurning);
-NetworkSyncHelper.bindContainerPropertyToFloat(container, 2, temperature, 100f);
-// El parámetro de escala (100f) divide el valor entero crudo para producir un float.
-// Así que un valor crudo de 50 se convierte en 0.5f.
-```
-
-### Lado del Servidor: Enviar Propiedades
-
-En su subclase de `Container`, sobrescriba `detectAndSendChanges()` para enviar valores:
+### Lado Servidor (`Container`)
+En su subclase de `Container`, sobrescriba `detectAndSendChanges()`:
 
 ```java
 @Override
 public void detectAndSendChanges() {
     super.detectAndSendChanges();
     for (IContainerListener listener : listeners) {
-        listener.sendWindowProperty(this, 0, fuelLevel);    // ID de propiedad 0
-        listener.sendWindowProperty(this, 1, isBurning ? 1 : 0);  // ID de propiedad 1
-        listener.sendWindowProperty(this, 2, (int)(temperature * 100f));  // ID de propiedad 2, escalado
+        // Enviar propiedades de 16 bits
+        listener.sendWindowProperty(this, 0, tileEntity.getProgress());
+        listener.sendWindowProperty(this, 1, tileEntity.isActive() ? 1 : 0);
+        listener.sendWindowProperty(this, 2, (int)(tileEntity.getTemperature() * 10.0f));
     }
 }
 ```
 
-### Lado del Cliente: Usar el Estado Sincronizado
-
-En el cliente, vincule el `State` sincronizado a los componentes UI:
+### Lado Cliente (`GuiBaseContainer`)
+En `initComponents()`, vincule las propiedades del contenedor a objetos `State<T>`:
 
 ```java
 @Override
 protected void initComponents() {
-    State<Integer> fuelLevel = new State<>(0);
-    State<Boolean> isBurning = new State<>(false);
+    State<Integer> progress = new State<>(0);
+    State<Boolean> active = new State<>(false);
+    State<Float> temperature = new State<>(0.0f);
 
-    NetworkSyncHelper.bindContainerPropertyToState(getContainer(), 0, fuelLevel);
-    NetworkSyncHelper.bindContainerPropertyToBoolean(getContainer(), 1, isBurning);
+    // Vinculación automática mediante NetworkSyncHelper
+    NetworkSyncHelper.bindContainerPropertyToState(getContainer(), 0, progress);
+    NetworkSyncHelper.bindContainerPropertyToBoolean(getContainer(), 1, active);
+    NetworkSyncHelper.bindContainerPropertyToFloat(getContainer(), 2, temperature, 10.0f);
 
-    GuiLabel fuelLabel = new GuiLabel(0, 0, "Fuel: 0", 0xFFFFFFFF);
-    fuelLabel.bindState(fuelLevel, value -> fuelLabel.setText("Fuel: " + value));
-
-    GuiToggle burningToggle = new GuiToggle(0, 0, 120, 20, "Burning", false, null);
-    burningToggle.bindState(isBurning, burning -> burningToggle.setState(burning));
+    // Enlazar los estados a componentes visuales
+    progressBar.bindState(progress, val -> progressBar.setProgress(val / 100.0f));
+    statusLabel.bindState(active, act -> statusLabel.setText(act ? "ACTIVO" : "INACTIVO"));
 }
 ```
 
-## IGuiActionSender
+---
 
-`IGuiActionSender` es una interfaz para despachar acciones estructuradas desde la GUI del cliente al servidor. Configúrelo en la pantalla e invóquelo desde callbacks de componentes.
+## 4. Despacho de Acciones Cliente-a-Servidor (`IGuiActionSender`)
+
+Para enviar comandos desde la interfaz al servidor (clics en botones de configuración, cambios de pestañas), configure un `IGuiActionSender` en su pantalla:
 
 ```java
 import com.x4yi.x4ui.common.sync.IGuiActionSender;
 import net.minecraft.nbt.NBTTagCompound;
 
-// Configurar en la pantalla
-IGuiActionSender sender = (actionId, data) -> {
-    MyModNetwork.CHANNEL.sendToServer(new PacketAction(actionId, data));
-};
-setActionSender(sender);
+// Configurar el despachador en la pantalla
+setActionSender((actionId, data) -> {
+    MyModNetwork.CHANNEL.sendToServer(new PacketGuiAction(actionId, data));
+});
 
-// Usar en un callback de botón
-NBTTagCompound data = new NBTTagCompound();
-data.setString("item", "diamond");
-sender.sendActionToServer("craft", data);
+// Invocar desde el callback de un botón
+saveButton.setOnClick(() -> {
+    NBTTagCompound data = new NBTTagCompound();
+    data.setInteger("powerMode", selectedMode);
+    sendActionToServer("set_power_mode", data);
+});
 ```
 
-## Restricciones Importantes
+---
 
-1. **Nunca referencie clases de X4UI en paquetes `common` o del servidor.** Siempre mantenga los imports de X4UI solo en código del lado del cliente.
-2. **Use `Minecraft.getMinecraft().addScheduledTask()`** en manejadores de paquetes para garantizar la seguridad de hilos.
-3. **Las propiedades de container están limitadas a valores `int`.** Use `sendWindowProperty()` con escala entera para floats.
-4. **`State<T>` en `com.x4yi.x4ui.common`** es seguro tanto para cliente como para servidor. Solo los componentes GUI son exclusivos del cliente.
+## Qué Evitar Hacer (Errores Críticos de Red y Sidedness)
+
+> [!CAUTION]
+> **1. NUNCA importar paquetes `com.x4yi.x4ui.client.*` en clases del servidor.**
+> Utilice estas clases únicamente con `@SideOnly(Side.CLIENT)`. Para paquetes comunes, use `State<T>` o `NetworkSyncHelper`.
+
+> [!CAUTION]
+> **2. NUNCA confiar ciegamente en datos recibidos mediante `IGuiActionSender`.**
+> Valide siempre la información en el servidor (rango, contenedor abierto, límites de valores) antes de procesar acciones de los jugadores.
+
+> [!WARNING]
+> **3. NUNCA olvidar el factor de escala en valores de punto flotante.**
+> `sendWindowProperty` solo envía enteros (`short`). Multiplique por una escala (ej. `10.0f`) en el servidor y pase la misma a `bindContainerPropertyToFloat()` en el cliente.
+
+> [!IMPORTANT]
+> **4. NUNCA ejecutar apertura de GUIs fuera de `addScheduledTask()`.**
+> Los paquetes de red llegan en hilos secundarios. Abrir GUIs sin agendarlo en el hilo principal bloqueará el cliente.

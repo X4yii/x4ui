@@ -1,6 +1,7 @@
 package com.x4yi.x4ui.client.gui.utils;
 import org.lwjgl.opengl.GL11;
 import java.util.Stack;
+@Deprecated
 public class ScissorHelper {
     private static class ScissorBox {
         int x, y, width, height;

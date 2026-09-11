@@ -13,6 +13,10 @@ buildscript {
 repositories {
     mavenLocal()
     mavenCentral()
+    maven {
+        name = "Progwml6 maven"
+        url = "https://dvs1.progwml6.com/files/maven/"
+    }
 }
 apply plugin: 'net.minecraftforge.gradle.forge'
 apply plugin: 'eclipse'
@@ -34,6 +38,8 @@ configurations {
 dependencies {
     embed 'org.jcodec:jcodec:0.2.5'
     embed 'org.jcodec:jcodec-javase:0.2.5'
+    compileOnly 'mezz.jei:jei_1.12.2:4.15.0.297:api'
+    testCompile 'junit:junit:4.12'
 }
 tasks.withType(JavaExec) {
     if (name == 'runClient') {

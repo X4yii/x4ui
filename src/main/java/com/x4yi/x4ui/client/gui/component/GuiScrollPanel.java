@@ -1,19 +1,24 @@
 package com.x4yi.x4ui.client.gui.component;
-import net.minecraft.client.gui.ScaledResolution;
-import org.lwjgl.opengl.GL11;
+import com.x4yi.x4ui.api.client.gui.IGraphics;
+import com.x4yi.x4ui.client.gui.component.layout.FlexDirection;
+import com.x4yi.x4ui.client.gui.utils.ITheme;
 public class GuiScrollPanel extends GuiPanel {
     protected float scrollY = 0;
     protected float targetScrollY = 0;
     protected int maxScrollY = 0;
     protected float scrollSpeed = 0.2f;
     protected int scrollStep = 22;
+    protected int scrollbarWidth = 4;
+    protected boolean isDraggingThumb = false;
+    protected int dragStartY = 0;
+    protected float dragStartScrollY = 0;
     protected GuiPanel contentPanel;
     public GuiScrollPanel(int x, int y, int width, int height) {
         super(x, y, width, height);
-        this.setFlexDirection(com.x4yi.x4ui.client.gui.component.layout.FlexDirection.ABSOLUTE);
+        this.setFlexDirection(FlexDirection.ABSOLUTE);
         contentPanel = new GuiPanel(0, 0, width, height) {
             @Override
-            protected void renderChildren(int mouseX, int mouseY, float partialTicks) {
+            protected void renderChildren(IGraphics gfx, int mouseX, int mouseY, float partialTicks) {
                 if (needsRenderSort) {
                     renderChildren.clear();
                     renderChildren.addAll(children);
@@ -26,7 +31,7 @@ public class GuiScrollPanel extends GuiPanel {
                     int childBottom = child.getY() - scrollViewY + child.getHeight() + child.getMargin().bottom;
                     int childTop = child.getY() - scrollViewY - child.getMargin().top;
                     if (childBottom > 0 && childTop < viewHeight) {
-                        child.render(mouseX, mouseY, partialTicks);
+                        child.render(gfx, mouseX, mouseY, partialTicks);
                     }
                 }
             }
@@ -48,7 +53,9 @@ public class GuiScrollPanel extends GuiPanel {
                 return false;
             }
         };
-        contentPanel.setFlexDirection(com.x4yi.x4ui.client.gui.component.layout.FlexDirection.VERTICAL);
+        contentPanel.setFlexDirection(FlexDirection.VERTICAL);
+        contentPanel.setHugContent(true);
+        contentPanel.withPercentWidth(1.0f);
         super.addChild(contentPanel);
     }
     public GuiPanel getContentPanel() {
@@ -60,6 +67,15 @@ public class GuiScrollPanel extends GuiPanel {
     public void setTargetScrollY(float y) { this.targetScrollY = y; }
     public int getMaxScrollY() { return maxScrollY; }
     public void scrollToBottom() { this.targetScrollY = this.maxScrollY; }
+    public int getScrollbarWidth() { return scrollbarWidth; }
+    public void setScrollbarWidth(int scrollbarWidth) { this.scrollbarWidth = Math.max(1, scrollbarWidth); }
+    public GuiScrollPanel withScrollbarWidth(int width) { setScrollbarWidth(width); return this; }
+    public int getScrollStep() { return scrollStep; }
+    public void setScrollStep(int step) { this.scrollStep = step; }
+    public GuiScrollPanel withScrollStep(int step) { setScrollStep(step); return this; }
+    public float getScrollSpeed() { return scrollSpeed; }
+    public void setScrollSpeed(float speed) { this.scrollSpeed = speed; }
+    public GuiScrollPanel withScrollSpeed(float speed) { setScrollSpeed(speed); return this; }
     @Override
     public void addChild(GuiComponent child) {
         contentPanel.addChild(child);
@@ -73,48 +89,121 @@ public class GuiScrollPanel extends GuiPanel {
         contentPanel.clearChildren();
     }
     @Override
-    public void tick(float deltaTime) {
-        super.tick(deltaTime);
+    public void update(float deltaTime) {
+        super.update(deltaTime);
         maxScrollY = Math.max(0, contentPanel.getHeight() - this.height);
         if (targetScrollY > maxScrollY) targetScrollY = maxScrollY;
         if (targetScrollY < 0) targetScrollY = 0;
-        float dt = com.x4yi.x4ui.client.gui.base.GuiBaseScreen.deltaTime;
-        scrollY += (targetScrollY - scrollY) * (scrollSpeed * 60f * dt);
+        float dt = (deltaTime > 0.0f) ? deltaTime : (com.x4yi.x4ui.client.gui.base.GuiBaseScreen.deltaTime > 0.0f ? com.x4yi.x4ui.client.gui.base.GuiBaseScreen.deltaTime : 0.016f);
+        float factor = Math.min(1.0f, Math.max(0.0f, scrollSpeed * 60f * dt));
+        scrollY += (targetScrollY - scrollY) * factor;
         if (Math.abs(targetScrollY - scrollY) < 0.5f) {
             scrollY = targetScrollY;
         }
-        contentPanel.setY(-(int)scrollY);
+        scrollY = Math.max(0.0f, Math.min((float) maxScrollY, scrollY));
+        contentPanel.setY(-(int) scrollY);
     }
     @Override
-    protected void renderChildren(int mouseX, int mouseY, float partialTicks) {
+    protected void renderChildren(IGraphics gfx, int mouseX, int mouseY, float partialTicks) {
         int absX = getAbsoluteX();
         int absY = getAbsoluteY();
-        int scale = com.x4yi.x4ui.client.gui.base.GuiBaseScreen.currentScaleFactor;
-        int scissorX = absX * scale;
-        int scissorY = mc.displayHeight - (absY + height) * scale;
-        int scissorW = width * scale;
-        int scissorH = height * scale;
-        com.x4yi.x4ui.client.gui.utils.ScissorHelper.pushScissor(scissorX, scissorY, scissorW, scissorH);
+        gfx.pushClip(absX, absY, width, height);
         try {
-            super.renderChildren(mouseX, mouseY, partialTicks);
+            super.renderChildren(gfx, mouseX, mouseY, partialTicks);
         } finally {
-            com.x4yi.x4ui.client.gui.utils.ScissorHelper.popScissor();
+            gfx.popClip();
         }
         if (maxScrollY > 0) {
-            com.x4yi.x4ui.client.gui.utils.ITheme theme = getTheme();
-            int trackX = absX + width - 5;
+            ITheme theme = getTheme();
+            int trackX = absX + width - scrollbarWidth - 2;
             int trackY = absY;
             int trackHeight = height;
-            drawRect(trackX, trackY, trackX + 2, trackY + trackHeight, theme.getScrollbarTrackColor());
+            gfx.drawRect(trackX, trackY, scrollbarWidth, trackHeight, theme.getScrollbarTrackColor());
             float scrollRatio = scrollY / maxScrollY;
-            int thumbHeight = Math.max(20, (int) ((float) height / contentPanel.getHeight() * trackHeight));
+            int thumbHeight = (contentPanel.getHeight() > 0) ? Math.max(20, (int) ((float) height / contentPanel.getHeight() * trackHeight)) : 20;
             int thumbY = trackY + (int) (scrollRatio * (trackHeight - thumbHeight));
-            drawRect(trackX, thumbY, trackX + 2, thumbY + thumbHeight, theme.getScrollbarThumbColor());
+            int thumbColor = isDraggingThumb ? 0xFF64B5F6 : theme.getScrollbarThumbColor();
+            gfx.drawRect(trackX, thumbY, scrollbarWidth, thumbHeight, thumbColor);
         }
+    }
+    @Override
+    public boolean onMouseClick(int mouseX, int mouseY, int mouseButton) {
+        if (!visible || !enabled) return false;
+        if (mouseButton == 0 && maxScrollY > 0) {
+            int absX = getAbsoluteX();
+            int absY = getAbsoluteY();
+            int trackHitbox = Math.max(8, scrollbarWidth + 4);
+            int trackAreaX = absX + width - trackHitbox;
+            if (mouseX >= trackAreaX && mouseX <= absX + width && mouseY >= absY && mouseY <= absY + height) {
+                int trackY = absY;
+                int trackHeight = height;
+                int thumbHeight = (contentPanel.getHeight() > 0) ? Math.max(20, (int) ((float) height / contentPanel.getHeight() * trackHeight)) : 20;
+                float scrollRatio = (maxScrollY > 0) ? (scrollY / maxScrollY) : 0;
+                int thumbY = trackY + (int) (scrollRatio * (trackHeight - thumbHeight));
+                if (mouseY >= thumbY && mouseY <= thumbY + thumbHeight) {
+                    isDraggingThumb = true;
+                    dragStartY = mouseY;
+                    dragStartScrollY = scrollY;
+                    requestScrollFocus(this);
+                    return true;
+                } else {
+                    int availableTrack = trackHeight - thumbHeight;
+                    if (availableTrack > 0) {
+                        float clickRatio = (float) (mouseY - trackY - thumbHeight / 2) / availableTrack;
+                        targetScrollY = Math.max(0, Math.min(maxScrollY, clickRatio * maxScrollY));
+                        scrollY = targetScrollY;
+                        isDraggingThumb = true;
+                        dragStartY = mouseY;
+                        dragStartScrollY = scrollY;
+                        requestScrollFocus(this);
+                        return true;
+                    }
+                }
+            }
+        }
+        return super.onMouseClick(mouseX, mouseY, mouseButton);
+    }
+    @Override
+    public boolean onMouseDrag(int mouseX, int mouseY, int clickedMouseButton, long timeSinceLastClick) {
+        if (!visible || !enabled) return false;
+        if (isDraggingThumb && clickedMouseButton == 0 && maxScrollY > 0) {
+            int trackHeight = height;
+            int thumbHeight = (contentPanel.getHeight() > 0) ? Math.max(20, (int) ((float) height / contentPanel.getHeight() * trackHeight)) : 20;
+            int availableTrack = trackHeight - thumbHeight;
+            if (availableTrack > 0) {
+                int deltaY = mouseY - dragStartY;
+                float deltaScroll = (float) deltaY / availableTrack * maxScrollY;
+                targetScrollY = Math.max(0, Math.min(maxScrollY, dragStartScrollY + deltaScroll));
+                scrollY = targetScrollY;
+                requestScrollFocus(this);
+            }
+            return true;
+        }
+        return super.onMouseDrag(mouseX, mouseY, clickedMouseButton, timeSinceLastClick);
+    }
+    @Override
+    public boolean onMouseRelease(int mouseX, int mouseY, int state) {
+        if (isDraggingThumb) {
+            isDraggingThumb = false;
+            clearScrollFocus();
+            return true;
+        }
+        return super.onMouseRelease(mouseX, mouseY, state);
     }
     @Override
     public boolean onMouseScroll(int mouseX, int mouseY, int wheel) {
         if (!isMouseOver(mouseX, mouseY)) {
+            return false;
+        }
+        if (getRoot().getScrollFocusedComponent() == this) {
+            if (wheel != 0 && maxScrollY > 0) {
+                int direction = wheel > 0 ? -1 : 1;
+                targetScrollY += direction * scrollStep;
+                if (targetScrollY < 0) targetScrollY = 0;
+                if (targetScrollY > maxScrollY) targetScrollY = maxScrollY;
+                requestScrollFocus(this);
+                return true;
+            }
             return false;
         }
         if (super.onMouseScroll(mouseX, mouseY, wheel)) {
@@ -125,6 +214,7 @@ public class GuiScrollPanel extends GuiPanel {
             targetScrollY += direction * scrollStep;
             if (targetScrollY < 0) targetScrollY = 0;
             if (targetScrollY > maxScrollY) targetScrollY = maxScrollY;
+            requestScrollFocus(this);
             return true;
         }
         return false;

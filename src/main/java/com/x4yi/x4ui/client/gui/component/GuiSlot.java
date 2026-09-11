@@ -9,21 +9,47 @@ public class GuiSlot extends GuiComponent {
         this.slot = slot;
         this.containerScreen = containerScreen;
     }
-    @Override
-    public void tick(float deltaTime) {
-        super.tick(deltaTime);
-        if (slot != null && containerScreen != null) {
-            int absX = getAbsoluteX();
-            int absY = getAbsoluteY();
-            slot.xPos = absX - containerScreen.getGuiLeft();
-            slot.yPos = absY - containerScreen.getGuiTop();
-        }
+    public Slot getSlot() {
+        return slot;
     }
     @Override
-    protected void renderSelf(int mouseX, int mouseY, float partialTicks) {
+    public void update(float deltaTime) {
+        super.update(deltaTime);
+        if (slot != null && containerScreen != null) {
+            if (isClippedByAncestors()) {
+                slot.xPos = -9999;
+                slot.yPos = -9999;
+            } else {
+                int absX = getAbsoluteX();
+                int absY = getAbsoluteY();
+                slot.xPos = absX - containerScreen.getGuiLeft();
+                slot.yPos = absY - containerScreen.getGuiTop();
+            }
+        }
+    }
+    private boolean isClippedByAncestors() {
         int absX = getAbsoluteX();
         int absY = getAbsoluteY();
-        drawRect(absX, absY, absX + width, absY + height, 0x55000000);
-        drawBorder(absX, absY, absX + width, absY + height, 0xFF333333);
+        GuiComponent current = this.parent;
+        while (current != null) {
+            if (current instanceof GuiScrollPanel) {
+                int pX = current.getAbsoluteX();
+                int pY = current.getAbsoluteY();
+                int pW = current.getWidth();
+                int pH = current.getHeight();
+                if (absX + width <= pX || absX >= pX + pW || absY + height <= pY || absY >= pY + pH) {
+                    return true;
+                }
+            }
+            current = current.getParent();
+        }
+        return false;
+    }
+    @Override
+    protected void renderSelf(com.x4yi.x4ui.api.client.gui.IGraphics gfx, int mouseX, int mouseY, float partialTicks) {
+        int absX = getAbsoluteX();
+        int absY = getAbsoluteY();
+        gfx.drawRect(absX, absY, width, height, 0x55000000);
+        gfx.drawBorder(absX, absY, width, height, 1, 0xFF333333);
     }
 }

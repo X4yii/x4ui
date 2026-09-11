@@ -1,287 +1,35 @@
 # Contenedores y Paneles
 
-Este documento cubre los componentes contenedor: `GuiPanel`, `GuiScrollPanel`, `GuiVirtualList` y `GuiSlot`.
-
----
+Los contenedores son los bloques de construcción estructurales de X4UI. Su propósito principal es hospedar otros componentes y gestionar su disposición a través de `FlexLayout`.
 
 ## GuiPanel
 
-El componente contenedor principal. Actúa como una caja de diseño que contiene componentes hijos y delega el posicionamiento a un gestor de `FlexLayout`.
-
-**Paquete:** `com.x4yi.x4ui.client.gui.component.GuiPanel`
-
-### Constructor
-
-```java
-new GuiPanel(int x, int y, int width, int height)
-```
-
-El layout predeterminado es `FlexDirection.ABSOLUTE` (los hijos usan sus propios valores de `x/y`).
-
-### Uso Básico
-
-```java
-import com.x4yi.x4ui.client.gui.component.GuiPanel;
-import com.x4yi.x4ui.client.gui.component.GuiButton;
-
-GuiPanel panel = new GuiPanel(10, 10, 200, 200);
-panel.addChild(new GuiButton(10, 10, 80, 20, "Button A", null));
-panel.addChild(new GuiButton(10, 40, 80, 20, "Button B", null));
-
-rootPanel.addChild(panel);
-```
-
-### Layout Flex
-
-```java
-import com.x4yi.x4ui.client.gui.component.layout.FlexDirection;
-import com.x4yi.x4ui.client.gui.utils.Insets;
-
-GuiPanel sidebar = new GuiPanel(0, 0, 200, 400);
-sidebar.setFlexDirection(FlexDirection.VERTICAL);
-sidebar.setGap(4);
-sidebar.setPadding(new Insets(8));
-
-sidebar.addChild(new GuiButton(0, 0, 180, 20, "Home", null));
-sidebar.addChild(new GuiButton(0, 0, 180, 20, "Settings", null));
-sidebar.addChild(new GuiButton(0, 0, 180, 20, "About", null));
-```
-
-Los hijos se apilan de arriba a abajo con espacios de 4px dentro de un área con padding de 8px.
-
-### Layout Horizontal
+El contenedor básico por excelencia. Por defecto, no dibuja fondo a menos que se le asigne un `GuiSprite` explícitamente o tenga un tema con un panel de fondo asignado.
 
 ```java
 import com.x4yi.x4ui.client.gui.component.layout.FlexDirection;
 
-GuiPanel toolbar = new GuiPanel(0, 0, 400, 30);
-toolbar.setFlexDirection(FlexDirection.HORIZONTAL);
-toolbar.setGap(2);
-
-toolbar.addChild(new GuiButton(0, 0, 80, 20, "Bold", null));
-toolbar.addChild(new GuiButton(0, 0, 80, 20, "Italic", null));
-toolbar.addChild(new GuiButton(0, 0, 80, 20, "Underline", null));
+GuiPanel panel = new GuiPanel(0, 0, 0, 0).withPercentWidth(1.0f);
+panel.setFlexDirection(FlexDirection.VERTICAL); // Apilar verticalmente
+panel.setGap(5); // 5 píxeles de separación
+panel.setPadding(new Insets(10)); // 10 píxeles de padding interno
 ```
-
-### Flex Wrap
-
-```java
-GuiPanel grid = new GuiPanel(0, 0, 400, 300);
-grid.setFlexDirection(FlexDirection.HORIZONTAL);
-grid.setFlexWrap(true);
-grid.setGap(5);
-
-for (int i = 0; i < 20; i++) {
-    grid.addChild(new GuiButton(0, 0, 80, 20, "Item " + i, null));
-}
-```
-
-Los hijos saltan a la siguiente fila cuando exceden el ancho del panel.
-
-### Tema Personalizado
-
-```java
-panel.setTheme(new ITheme() { /* ... */ });
-```
-
-Los temas se propagan a todos los hijos. Si un hijo no tiene un tema explícito, hereda del padre.
-
-### Propiedades
-
-| Método | Tipo | Descripción |
-|--------|------|-------------|
-| `setFlexDirection(FlexDirection)` | `void` | Establece la dirección del layout |
-| `getFlexDirection()` | `FlexDirection` | Devuelve la dirección actual |
-| `setGap(int)` | `void` | Establece el espaciado entre hijos |
-| `setFlexWrap(boolean)` | `void` | Habilita el envolvimiento |
-
----
 
 ## GuiScrollPanel
 
-Un contenedor desplazable con desplazamiento animado suave, barra de desplazamiento vertical y recorte OpenGL scissor.
+Este panel incluye todo el comportamiento de `GuiPanel`, pero encapsula a sus hijos dentro de un **viewport de desplazamiento**. Posee su propio sub-contenedor llamado `contentPanel`.
 
-**Paquete:** `com.x4yi.x4ui.client.gui.component.GuiScrollPanel`
-
-### Constructor
-
-```java
-new GuiScrollPanel(int x, int y, int width, int height)
-```
-
-### Uso Básico
+### La Regla del Ancho en GuiScrollPanel
+Por un principio de responsabilidad de Layout, el `contentPanel` interno hereda el 100% del ancho (`.withPercentWidth(1.0f)`) automáticamente desde su constructor si su `GuiScrollPanel` padre recibe un ancho.
+Aun así, al inicializar el padre responsivamente, la sintaxis correcta es:
 
 ```java
-import com.x4yi.x4ui.client.gui.component.GuiScrollPanel;
-import com.x4yi.x4ui.client.gui.component.GuiButton;
+GuiScrollPanel scroll = (GuiScrollPanel) new GuiScrollPanel(0, 0, 0, 250).withPercentWidth(1.0f);
+scroll.getContentPanel().setFlexDirection(FlexDirection.VERTICAL); // Configurar el layout interno
 
-GuiScrollPanel scrollList = new GuiScrollPanel(10, 10, 200, 150);
-
-for (int i = 0; i < 30; i++) {
-    final int index = i;
-    scrollList.addChild(new GuiButton(0, 0, 180, 20, "Item " + index, () -> {
-        System.out.println("Clicked item " + index);
-    }));
-}
-
-rootPanel.addChild(scrollList);
+scroll.addChild(card1); // Nota: GuiScrollPanel redirige los addChildren a su contentPanel
+scroll.addChild(card2);
 ```
 
-### Agregar y Eliminar Hijos
-
-`addChild()`, `removeChild()` y `clearChildren()` delegan al `contentPanel` interno:
-
-```java
-scrollList.addChild(new GuiButton(0, 0, 180, 20, "New Item", null));
-scrollList.clearChildren();
-```
-
-### Desplazamiento Programático
-
-```java
-scrollList.scrollToBottom();                    // Desplazamiento suave al fondo
-scrollList.setScrollY(100);                     // Salto instantáneo a Y=100
-scrollList.setTargetScrollY(200);               // Desplazamiento suave a Y=200
-float currentScroll = scrollList.getScrollY();   // Posición actual de desplazamiento
-int maxScroll = scrollList.getMaxScrollY();      // Rango máximo de desplazamiento
-```
-
-### Comportamiento de Desplazamiento
-
-- La rueda del mouse desplaza por `scrollStep` píxeles (predeterminado: 22)
-- El desplazamiento es animado con `scrollSpeed` (predeterminado: 0.2)
-- El contenido se recorta mediante OpenGL scissor
-- Se dibuja una barra de desplazamiento temática en el borde derecho
-
-### Renderizado
-
-- El contenido se renderiza dentro de una región scissor que coincide con los límites del panel
-- Solo se renderizan los hijos visibles (los hijos fuera de pantalla se omiten)
-- Pista de la barra de desplazamiento: `theme.getScrollbarTrackColor()`
-- Pulgar de la barra de desplazamiento: `theme.getScrollbarThumbColor()`
-
-### Interacción con GuiVideo y GuiImage
-
-Los componentes como `GuiVideo` o `GuiImage` dentro de un `GuiScrollPanel` se recortan por la región scissor. Cuando se desplazan fuera de la vista, no se renderizan.
-
----
-
-## GuiVirtualList
-
-Una lista virtualizada de alto rendimiento que solo instancia componentes para los elementos actualmente visibles en el viewport de desplazamiento. Ideal para conjuntos de datos grandes (cientos o miles de elementos).
-
-**Paquete:** `com.x4yi.x4ui.client.gui.component.GuiVirtualList`
-
-### Constructor
-
-```java
-new GuiVirtualList(int x, int y, int width, int height, int itemHeight, Function<T, GuiComponent> builder)
-```
-
-- `itemHeight` -- Altura fija de cada elemento en píxeles
-- `builder` -- Función que crea un `GuiComponent` para cada elemento
-
-### Uso Básico
-
-```java
-import com.x4yi.x4ui.client.gui.component.GuiVirtualList;
-import com.x4yi.x4ui.client.gui.component.GuiButton;
-
-List<String> items = new ArrayList<>();
-for (int i = 0; i < 1000; i++) {
-    items.add("Item " + i);
-}
-
-GuiVirtualList<String> list = new GuiVirtualList<>(10, 10, 200, 300, 25, item ->
-    new GuiButton(0, 0, 180, 20, item, () -> System.out.println("Clicked: " + item))
-);
-
-list.setItems(items);
-rootPanel.addChild(list);
-```
-
-### Actualizar Elementos
-
-```java
-// Reemplazar todos los elementos
-List<String> newItems = Arrays.asList("A", "B", "C");
-list.setItems(newItems);
-```
-
-### Cómo Funciona
-
-1. Solo los elementos dentro del rango de desplazamiento visible (más 2 extra para desplazamiento suave) se instancian.
-2. Cuando los elementos se desplazan fuera de la vista, sus componentes se eliminan del árbol y se destruyen.
-3. Cuando los elementos se desplazan a la vista, se crean nuevos componentes mediante la función `builder`.
-4. El `contentPanel` usa layout `FlexDirection.ABSOLUTE`, con cada elemento posicionado en `index * itemHeight`.
-
-### Características de Rendimiento
-
-- **Memoria**: O(elementos visibles) en lugar de O(total de elementos)
-- **Renderizado**: Solo se renderizan los elementos visibles cada frame
-- **Layout**: Solo los elementos visibles participan en cálculos de layout
-- **Creación**: Los componentes se crean/destruyen durante el desplazamiento (reciclados)
-
-### Comparación con GuiScrollPanel
-
-| Característica | GuiScrollPanel | GuiVirtualList |
-|----------------|----------------|----------------|
-| Hijos | Todos instanciados | Solo los visibles |
-| Memoria | O(n) | O(visibles) |
-| Agregar/eliminar | Inmediato | Diferido (basado en desplazamiento) |
-| Caso de uso | Listas pequeñas (< 100) | Listas grandes (100+) |
-
----
-
-## GuiSlot
-
-Envuelve un `Slot` de Minecraft para posicionarlo dentro del árbol de componentes de X4UI. La posición del slot se sincroniza cada tick para coincidir con la posición absoluta del componente.
-
-**Paquete:** `com.x4yi.x4ui.client.gui.component.GuiSlot`
-
-### Constructor
-
-```java
-new GuiSlot(Slot slot, GuiBaseContainer containerScreen)
-```
-
-### Uso
-
-```java
-import com.x4yi.x4ui.client.gui.component.GuiSlot;
-import com.x4yi.x4ui.client.gui.component.GuiPanel;
-import com.x4yi.x4ui.client.gui.component.layout.FlexDirection;
-
-// Dentro del initComponents() de un GuiBaseContainer
-GuiPanel inventoryPanel = new GuiPanel(0, 0, 200, 150);
-inventoryPanel.setFlexDirection(FlexDirection.VERTICAL);
-inventoryPanel.setGap(2);
-
-for (Slot slot : inventorySlots.inventorySlots) {
-    inventoryPanel.addChild(new GuiSlot(slot, this));
-}
-
-rootPanel.addChild(inventoryPanel);
-```
-
-### Comportamiento
-
-- Tamaño fijo: 18x18 píxeles
-- Cada tick, `slot.xPos` y `slot.yPos` se actualizan para coincidir con la posición absoluta del componente menos el `guiLeft`/`guiTop` del contenedor
-- Renderiza un fondo semitransparente (`0x55000000`) y borde (`0xFF333333`)
-
-### Integración con GuiBaseContainer
-
-`GuiSlot` requiere una referencia a `GuiBaseContainer` para acceder a `getGuiLeft()` y `getGuiTop()`. Esto asegura que la posición del slot sea correcta en relación con el fondo del contenedor vanilla.
-
-### Integración con JEI
-
-`GuiBaseContainer` provee `getJeiRecipeAreas()` para registrar áreas de transferencia de recetas compatibles con Just Enough Items (JEI).
-
-```java
-@Override
-protected void initComponents() {
-    // Agregar áreas de transferencia de recetas para JEI
-    jeiRecipeAreas.add(new Rectangle(50, 20, 80, 80));
-}
-```
+> [!WARNING]
+> No confundas `scroll.setFlexDirection(...)` con `scroll.getContentPanel().setFlexDirection(...)`. El primero afecta a cómo el panel exterior acomoda sus elementos (generalmente inútil, ya que su único hijo interno directo es el `contentPanel`), mientras que el segundo define cómo se organizan los elementos que tú agregas al scroll.

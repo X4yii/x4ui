@@ -1,5 +1,6 @@
 package com.x4yi.x4ui.client.gui.component;
-
+import com.x4yi.x4ui.api.client.gui.IGraphics;
+import com.x4yi.x4ui.impl.client.gui.GLGraphics;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.FontRenderer;
 import net.minecraftforge.fml.relauncher.Side;
@@ -7,11 +8,10 @@ import net.minecraftforge.fml.relauncher.SideOnly;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
-
 @SideOnly(Side.CLIENT)
 public abstract class GuiComponent {
     protected final Minecraft mc = Minecraft.getMinecraft();
-    protected final FontRenderer fontRenderer = mc.fontRenderer;
+    protected final FontRenderer fontRenderer = mc != null ? mc.fontRenderer : null;
     protected GuiComponent parent;
     protected final List<GuiComponent> children = new ArrayList<>();
     protected final List<GuiComponent> renderChildren = new ArrayList<>();
@@ -20,6 +20,10 @@ public abstract class GuiComponent {
     protected int y;
     protected int width;
     protected int height;
+    protected float percentX = -1.0f;
+    protected float percentY = -1.0f;
+    protected float percentWidth = -1.0f;
+    protected float percentHeight = -1.0f;
     protected com.x4yi.x4ui.client.gui.utils.Insets padding = com.x4yi.x4ui.client.gui.utils.Insets.ZERO;
     protected com.x4yi.x4ui.client.gui.utils.Insets margin = com.x4yi.x4ui.client.gui.utils.Insets.ZERO;
     protected boolean visible = true;
@@ -31,9 +35,8 @@ public abstract class GuiComponent {
     protected GuiComponent tooltipComponent = null;
     protected com.x4yi.x4ui.client.gui.component.layout.ILayoutManager layoutManager = null;
     protected com.x4yi.x4ui.client.gui.utils.ITheme theme = null;
-
+    protected com.x4yi.x4ui.api.client.font.IFont font = null;
     protected static final java.util.Comparator<GuiComponent> LAYER_COMPARATOR = java.util.Comparator.comparingInt(GuiComponent::getLayer);
-    
     public String getTooltipText() { return tooltipText; }
     public void setTooltip(String tooltipText) { this.tooltipText = tooltipText; }
     public GuiComponent getTooltipComponent() { return tooltipComponent; }
@@ -46,6 +49,25 @@ public abstract class GuiComponent {
         if (this.parent != null) return this.parent.getTheme();
         return com.x4yi.x4ui.client.gui.utils.DefaultTheme.INSTANCE;
     }
+    public GuiComponent withFont(com.x4yi.x4ui.api.client.font.IFont font) {
+        this.font = font;
+        requestRender();
+        return this;
+    }
+    public GuiComponent withFont(String fontName) {
+        this.font = com.x4yi.x4ui.impl.client.font.FontRegistry.INSTANCE.get(fontName);
+        requestRender();
+        return this;
+    }
+    public void setFont(com.x4yi.x4ui.api.client.font.IFont font) {
+        this.font = font;
+        requestRender();
+    }
+    public com.x4yi.x4ui.api.client.font.IFont getFont() {
+        if (this.font != null) return this.font;
+        if (this.parent != null) return this.parent.getFont();
+        return getTheme() != null ? getTheme().getFont() : com.x4yi.x4ui.impl.client.font.VanillaFont.INSTANCE;
+    }
     public int getLayer() { return layer; }
     public void setLayer(int layer) {
         if (this.layer != layer) {
@@ -53,22 +75,17 @@ public abstract class GuiComponent {
             if (parent != null) parent.requestRender();
         }
     }
-
     public void requestLayout() {
         this.needsLayout = true;
     }
-
     public void requestRender() {
         this.needsRenderSort = true;
     }
-
     public void markDirty() {
         requestLayout();
         requestRender();
     }
-    
     protected GuiComponent focusedComponent = null;
-
     public GuiComponent getRoot() {
         GuiComponent current = this;
         while (current.getParent() != null) {
@@ -76,7 +93,6 @@ public abstract class GuiComponent {
         }
         return current;
     }
-
     public void requestFocus() {
         GuiComponent root = getRoot();
         if (root.focusedComponent != this) {
@@ -87,7 +103,6 @@ public abstract class GuiComponent {
             this.onFocusGained();
         }
     }
-
     public void clearFocus() {
         GuiComponent root = getRoot();
         if (root.focusedComponent == this) {
@@ -95,27 +110,48 @@ public abstract class GuiComponent {
             root.focusedComponent = null;
         }
     }
-
     public boolean isFocused() {
         return getRoot().focusedComponent == this;
     }
-
     protected void onFocusGained() {}
     protected void onFocusLost() {}
+    protected GuiComponent scrollFocusedComponent = null;
+    protected float scrollFocusTimer = 0.0f;
+    public static final float DEFAULT_SCROLL_FOCUS_TIMEOUT = 0.25f;
+    public void requestScrollFocus(GuiComponent component) {
+        GuiComponent root = getRoot();
+        root.scrollFocusedComponent = component;
+        root.scrollFocusTimer = DEFAULT_SCROLL_FOCUS_TIMEOUT;
+    }
+    public void clearScrollFocus() {
+        GuiComponent root = getRoot();
+        root.scrollFocusedComponent = null;
+        root.scrollFocusTimer = 0.0f;
+    }
+    public GuiComponent getScrollFocusedComponent() {
+        return getRoot().scrollFocusedComponent;
+    }
+    public boolean hasScrollFocus() {
+        return getRoot().scrollFocusedComponent == this;
+    }
     public GuiComponent(int x, int y, int width, int height) {
         this.x = x;
         this.y = y;
         this.width = width;
         this.height = height;
     }
+    protected void onAttached(GuiComponent parent) {}
+    protected void onDetached() {}
     public void addChild(GuiComponent child) {
         child.setParent(this);
         children.add(child);
+        child.onAttached(this);
         markDirty();
     }
     public void removeChild(GuiComponent child) {
         if (child != null && children.remove(child)) {
             child.destroy();
+            child.onDetached();
             child.setParent(null);
             markDirty();
         }
@@ -123,6 +159,7 @@ public abstract class GuiComponent {
     public void clearChildren() {
         for (GuiComponent child : children) {
             child.destroy();
+            child.onDetached();
             child.setParent(null);
         }
         children.clear();
@@ -143,17 +180,56 @@ public abstract class GuiComponent {
     public int getAbsoluteY() {
         return parent == null ? y : parent.getAbsoluteY() + y;
     }
-    public void tick(float deltaTime) {
+    public void update(float deltaTime) {
         if (!visible) return;
+        if (parent != null) {
+            if (percentWidth >= 0.0f) {
+                int pw = Math.max(0, (int) (parent.getWidth() * percentWidth));
+                if (this.width != pw) {
+                    setWidth(pw);
+                }
+            }
+            if (percentHeight >= 0.0f) {
+                int ph = Math.max(0, (int) (parent.getHeight() * percentHeight));
+                if (this.height != ph) {
+                    setHeight(ph);
+                }
+            }
+            if (percentX >= 0.0f) {
+                int px = (int) (parent.getWidth() * percentX);
+                if (this.x != px) {
+                    setX(px);
+                }
+            }
+            if (percentY >= 0.0f) {
+                int py = (int) (parent.getHeight() * percentY);
+                if (this.y != py) {
+                    setY(py);
+                }
+            }
+        }
         if (needsLayout && layoutManager != null) {
             layoutManager.layout(this, children);
             needsLayout = false;
         }
+        if (this.parent == null && this.scrollFocusedComponent != null) {
+            this.scrollFocusTimer -= deltaTime;
+            if (this.scrollFocusTimer <= 0.0f) {
+                this.scrollFocusedComponent = null;
+                this.scrollFocusTimer = 0.0f;
+            }
+        }
         for (GuiComponent child : children) {
-            child.tick(deltaTime);
+            child.update(deltaTime);
         }
     }
+    @Deprecated
+    public void tick(float deltaTime) {
+        update(deltaTime);
+    }
     public void destroy() {
+        onDestroy();
+        com.x4yi.x4ui.client.gui.animation.GuiAnimator.cancel(this);
         for (Runnable unbinder : unbinders) {
             unbinder.run();
         }
@@ -162,45 +238,75 @@ public abstract class GuiComponent {
             child.destroy();
         }
     }
+    protected void onDestroy() {}
+    public void addUnbinder(Runnable unbinder) {
+        if (unbinder != null) {
+            this.unbinders.add(unbinder);
+        }
+    }
+    public <T, R> com.x4yi.x4ui.common.State<R> mapState(com.x4yi.x4ui.common.State<T> source, java.util.function.Function<T, R> mapper) {
+        com.x4yi.x4ui.common.State<R> mapped = source.map(mapper);
+        addUnbinder(mapped::dispose);
+        return mapped;
+    }
     public <T> void bindState(com.x4yi.x4ui.common.State<T> state, java.util.function.Consumer<T> onChange) {
         java.util.function.Consumer<T> listener = value -> {
-            if (Minecraft.getMinecraft().isCallingFromMinecraftThread()) {
+            Minecraft client = Minecraft.getMinecraft();
+            if (client == null || client.isCallingFromMinecraftThread()) {
                 onChange.accept(value);
             } else {
-                Minecraft.getMinecraft().addScheduledTask(() -> onChange.accept(value));
+                client.addScheduledTask(() -> onChange.accept(value));
             }
         };
         state.addListener(listener);
         unbinders.add(() -> state.removeListener(listener));
         listener.accept(state.get());
     }
-    public void render(int mouseX, int mouseY, float partialTicks) {
+    public void render(IGraphics gfx, int mouseX, int mouseY, float partialTicks) {
         if (!visible) return;
-        renderSelf(mouseX, mouseY, partialTicks);
-        renderChildren(mouseX, mouseY, partialTicks);
+        if (gfx.isClipped(getAbsoluteX(), getAbsoluteY(), width, height)) return;
+        com.x4yi.x4ui.api.client.font.IFont prevFont = null;
+        if (this.font != null) {
+            prevFont = gfx.getFont();
+            gfx.setFont(this.font);
+        }
+        try {
+            renderSelf(gfx, mouseX, mouseY, partialTicks);
+            renderChildren(gfx, mouseX, mouseY, partialTicks);
+        } finally {
+            if (this.font != null) {
+                gfx.setFont(prevFont);
+            }
+        }
     }
-    protected abstract void renderSelf(int mouseX, int mouseY, float partialTicks);
-    protected void renderChildren(int mouseX, int mouseY, float partialTicks) {
+    @Deprecated
+    public void render(int mouseX, int mouseY, float partialTicks) {
+        render(GLGraphics.INSTANCE, mouseX, mouseY, partialTicks);
+    }
+    protected abstract void renderSelf(IGraphics gfx, int mouseX, int mouseY, float partialTicks);
+    protected void ensureRenderChildren() {
         if (needsRenderSort) {
             renderChildren.clear();
             renderChildren.addAll(children);
             renderChildren.sort(LAYER_COMPARATOR);
             needsRenderSort = false;
         }
+    }
+    protected void renderChildren(IGraphics gfx, int mouseX, int mouseY, float partialTicks) {
+        ensureRenderChildren();
         for (GuiComponent child : renderChildren) {
-            child.render(mouseX, mouseY, partialTicks);
+            child.render(gfx, mouseX, mouseY, partialTicks);
         }
     }
     public boolean onMouseClick(int mouseX, int mouseY, int mouseButton) {
         if (!visible || !enabled) return false;
-        
+        ensureRenderChildren();
         if (this.parent == null) {
             GuiComponent hovered = getHoveredComponent(mouseX, mouseY);
             if (this.focusedComponent != null && hovered != this.focusedComponent) {
                 this.focusedComponent.clearFocus();
             }
         }
-
         for (int i = renderChildren.size() - 1; i >= 0; i--) {
             if (renderChildren.get(i).onMouseClick(mouseX, mouseY, mouseButton)) {
                 return true;
@@ -210,6 +316,12 @@ public abstract class GuiComponent {
     }
     public boolean onMouseRelease(int mouseX, int mouseY, int state) {
         if (!visible || !enabled) return false;
+        ensureRenderChildren();
+        if (this.parent == null && this.scrollFocusedComponent != null) {
+            if (this.scrollFocusedComponent.onMouseRelease(mouseX, mouseY, state)) {
+                return true;
+            }
+        }
         for (int i = renderChildren.size() - 1; i >= 0; i--) {
             if (renderChildren.get(i).onMouseRelease(mouseX, mouseY, state)) {
                 return true;
@@ -219,6 +331,12 @@ public abstract class GuiComponent {
     }
     public boolean onMouseDrag(int mouseX, int mouseY, int clickedMouseButton, long timeSinceLastClick) {
         if (!visible || !enabled) return false;
+        ensureRenderChildren();
+        if (this.parent == null && this.scrollFocusedComponent != null) {
+            if (this.scrollFocusedComponent.onMouseDrag(mouseX, mouseY, clickedMouseButton, timeSinceLastClick)) {
+                return true;
+            }
+        }
         for (int i = renderChildren.size() - 1; i >= 0; i--) {
             if (renderChildren.get(i).onMouseDrag(mouseX, mouseY, clickedMouseButton, timeSinceLastClick)) {
                 return true;
@@ -228,17 +346,15 @@ public abstract class GuiComponent {
     }
     public boolean onKeyPress(char typedChar, int keyCode) {
         if (!visible || !enabled) return false;
-
+        ensureRenderChildren();
         if (this.parent == null && this.focusedComponent != null) {
             if (this.focusedComponent.onKeyPress(typedChar, keyCode)) {
                 return true;
             }
         }
-
         for (int i = renderChildren.size() - 1; i >= 0; i--) {
             GuiComponent child = renderChildren.get(i);
             if (this.parent == null && child == this.focusedComponent) continue; 
-            
             if (child.onKeyPress(typedChar, keyCode)) {
                 return true;
             }
@@ -247,8 +363,23 @@ public abstract class GuiComponent {
     }
     public boolean onMouseScroll(int mouseX, int mouseY, int wheel) {
         if (!visible || !enabled) return false;
+        ensureRenderChildren();
+        if (this.parent == null && this.scrollFocusedComponent != null) {
+            if (this.scrollFocusedComponent.isVisible() && this.scrollFocusedComponent.isEnabled()
+                    && this.scrollFocusedComponent.contains(mouseX, mouseY)) {
+                this.scrollFocusTimer = DEFAULT_SCROLL_FOCUS_TIMEOUT;
+                if (this.scrollFocusedComponent.onMouseScroll(mouseX, mouseY, wheel)) {
+                    return true;
+                }
+            } else {
+                this.scrollFocusedComponent = null;
+                this.scrollFocusTimer = 0.0f;
+            }
+        }
         for (int i = renderChildren.size() - 1; i >= 0; i--) {
-            if (renderChildren.get(i).onMouseScroll(mouseX, mouseY, wheel)) {
+            GuiComponent child = renderChildren.get(i);
+            if (this.parent == null && child == this.scrollFocusedComponent) continue;
+            if (child.onMouseScroll(mouseX, mouseY, wheel)) {
                 return true;
             }
         }
@@ -261,6 +392,7 @@ public abstract class GuiComponent {
     }
     public GuiComponent getHoveredComponent(int mouseX, int mouseY) {
         if (!visible || !isMouseOver(mouseX, mouseY)) return null;
+        ensureRenderChildren();
         for (int i = renderChildren.size() - 1; i >= 0; i--) {
             GuiComponent hovered = renderChildren.get(i).getHoveredComponent(mouseX, mouseY);
             if (hovered != null) return hovered;
@@ -269,6 +401,9 @@ public abstract class GuiComponent {
             return this;
         }
         return null;
+    }
+    public boolean contains(int mouseX, int mouseY) {
+        return isMouseOver(mouseX, mouseY);
     }
     protected boolean isMouseOver(int mouseX, int mouseY) {
         int absX = getAbsoluteX();
@@ -286,10 +421,10 @@ public abstract class GuiComponent {
         drawRect(right - 1, top + 1, right, bottom - 1, color);
     }
     protected void drawCenteredString(String text, int x, int y, int color) {
-        fontRenderer.drawString(text, x - fontRenderer.getStringWidth(text) / 2, y, color);
+        getFont().draw(text, x - getFont().getWidth(text) / 2.0f, y, color, false);
     }
     protected void drawString(String text, int x, int y, int color) {
-        fontRenderer.drawString(text, x, y, color);
+        getFont().draw(text, x, y, color, false);
     }
     public int getX() { return x; }
     public int getY() { return y; }
@@ -307,6 +442,30 @@ public abstract class GuiComponent {
     public void setVisible(boolean visible) { if (this.visible != visible) { this.visible = visible; if (parent != null) parent.requestLayout(); } }
     public boolean isEnabled() { return enabled; }
     public void setEnabled(boolean enabled) { this.enabled = enabled; }
+    public GuiComponent withPosition(int x, int y) { setX(x); setY(y); return this; }
+    public GuiComponent withSize(int width, int height) { setWidth(width); setHeight(height); return this; }
+    public GuiComponent withPadding(com.x4yi.x4ui.client.gui.utils.Insets padding) { setPadding(padding); return this; }
+    public GuiComponent withPadding(int top, int right, int bottom, int left) { return withPadding(new com.x4yi.x4ui.client.gui.utils.Insets(top, right, bottom, left)); }
+    public GuiComponent withMargin(com.x4yi.x4ui.client.gui.utils.Insets margin) { setMargin(margin); return this; }
+    public GuiComponent withMargin(int top, int right, int bottom, int left) { return withMargin(new com.x4yi.x4ui.client.gui.utils.Insets(top, right, bottom, left)); }
+    public float getPercentX() { return percentX; }
+    public float getPercentY() { return percentY; }
+    public float getPercentWidth() { return percentWidth; }
+    public float getPercentHeight() { return percentHeight; }
+    public void setPercentX(float percentX) { this.percentX = percentX; if (parent != null) parent.requestLayout(); }
+    public void setPercentY(float percentY) { this.percentY = percentY; if (parent != null) parent.requestLayout(); }
+    public void setPercentWidth(float percentWidth) { this.percentWidth = percentWidth; requestLayout(); if (parent != null) parent.requestLayout(); }
+    public void setPercentHeight(float percentHeight) { this.percentHeight = percentHeight; requestLayout(); if (parent != null) parent.requestLayout(); }
+    public GuiComponent withPercentPosition(float percentX, float percentY) { setPercentX(percentX); setPercentY(percentY); return this; }
+    public GuiComponent withPercentWidth(float percentWidth) { setPercentWidth(percentWidth); return this; }
+    public GuiComponent withPercentHeight(float percentHeight) { setPercentHeight(percentHeight); return this; }
+    public GuiComponent withPercentSize(float percentWidth, float percentHeight) { setPercentWidth(percentWidth); setPercentHeight(percentHeight); return this; }
+    public GuiComponent withVisible(boolean visible) { setVisible(visible); return this; }
+    public GuiComponent withEnabled(boolean enabled) { setEnabled(enabled); return this; }
+    public GuiComponent withTooltip(String tooltipText) { setTooltip(tooltipText); return this; }
+    public GuiComponent withTooltip(GuiComponent tooltipComponent) { setTooltipComponent(tooltipComponent); return this; }
+    public GuiComponent withTheme(com.x4yi.x4ui.client.gui.utils.ITheme theme) { setTheme(theme); return this; }
+    public GuiComponent withLayer(int layer) { setLayer(layer); return this; }
     protected int lerpColor(int color1, int color2, float t) {
         int a1 = (color1 >> 24) & 0xFF;
         int r1 = (color1 >> 16) & 0xFF;

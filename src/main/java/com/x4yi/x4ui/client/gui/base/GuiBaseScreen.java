@@ -52,10 +52,8 @@ public abstract class GuiBaseScreen extends GuiScreen {
             onScreenResize(width, height);
         }
     }
-
     protected void onScreenResize(int newWidth, int newHeight) {
     }
-
     protected abstract void initComponents();
     @Override
     public void drawScreen(int mouseX, int mouseY, float partialTicks) {
@@ -67,11 +65,14 @@ public abstract class GuiBaseScreen extends GuiScreen {
         }
         lastRenderTime = currentTime;
         if (rootPanel != null) {
-            rootPanel.tick(deltaTime);
-            rootPanel.render(mouseX, mouseY, partialTicks);
+            rootPanel.update(deltaTime);
+            com.x4yi.x4ui.impl.client.gui.GLGraphics gfx = com.x4yi.x4ui.impl.client.gui.GLGraphics.INSTANCE;
+            gfx.reset();
+            rootPanel.render(gfx, mouseX, mouseY, partialTicks);
         }
         super.drawScreen(mouseX, mouseY, partialTicks);
         if (rootPanel != null) {
+            com.x4yi.x4ui.impl.client.gui.GLGraphics gfx = com.x4yi.x4ui.impl.client.gui.GLGraphics.INSTANCE;
             com.x4yi.x4ui.client.gui.component.GuiComponent hovered = rootPanel.getHoveredComponent(mouseX, mouseY);
             com.x4yi.x4ui.client.gui.component.GuiComponent tooltipSource = hovered;
             while (tooltipSource != null && tooltipSource.getTooltipText() == null && tooltipSource.getTooltipComponent() == null) {
@@ -79,9 +80,12 @@ public abstract class GuiBaseScreen extends GuiScreen {
             }
             if (tooltipSource != null) {
                 if (tooltipSource.getTooltipComponent() != null) {
-                    rootPanel.getTheme().drawTooltipComponent(tooltipSource.getTooltipComponent(), mouseX, mouseY, this.width, this.height);
+                    rootPanel.getTheme().drawTooltipComponent(gfx, tooltipSource.getTooltipComponent(), mouseX, mouseY, this.width, this.height);
                 } else if (tooltipSource.getTooltipText() != null) {
-                    rootPanel.getTheme().drawTooltip(java.util.Arrays.asList(tooltipSource.getTooltipText().split("\n")), mouseX, mouseY, this.width, this.height);
+                    String text = tooltipSource.getTooltipText();
+                    java.util.List<String> lines = (text.indexOf('\n') == -1) ?
+                            java.util.Collections.singletonList(text) : java.util.Arrays.asList(text.split("\n"));
+                    rootPanel.getTheme().drawTooltip(gfx, lines, mouseX, mouseY, this.width, this.height);
                 }
             }
         }

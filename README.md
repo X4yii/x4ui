@@ -49,7 +49,7 @@ repositories {
 }
 
 dependencies {
-    deobfCompile "com.x4yi:X4UI-1.12.2:1.0b4"
+    deobfCompile "com.x4yi:X4UI-1.12.2:1.0b5"
 }
 ```
 
@@ -91,14 +91,19 @@ Minecraft.getMinecraft().displayGuiScreen(new MyScreen(Minecraft.getMinecraft().
 
 | Document | Description |
 |----------|-------------|
-| [00 - Getting Started](Docs/en-us/00-getting-started.md) | Installation, creating screens, builder API, themes |
-| [01 - Core Concepts](Docs/en-us/01-core-concepts.md) | Component tree, coordinates, flexbox, events, State, theming, animation |
-| [02 - Remote Assets](Docs/en-us/02-remote-assets.md) | RemoteResourceManager, URL loading, cache management |
-| [03 - Networking](Docs/en-us/03-networking-and-sync.md) | Forge networking, server-to-client GUI opening, container sync |
-| [Buttons and Inputs](Docs/en-us/components/buttons-and-inputs.md) | GuiButton, GuiTextInput, GuiToggle, GuiSlider |
-| [Containers and Panels](Docs/en-us/components/containers-and-panels.md) | GuiPanel, GuiScrollPanel, GuiVirtualList, GuiSlot |
-| [Multimedia](Docs/en-us/components/multimedia.md) | GuiImage, GuiSprite, GuiVideo, GuiAudio |
-| [Advanced Components](Docs/en-us/components/advanced-components.md) | GuiMarkdown, GuiModelRender, GuiDropdown, Tooltips |
+| [00 - Getting Started](Docs/en-us/00-getting-started.md) | Installation, creating screens, fluent API, theme setup, pitfalls |
+| [01 - Core Concepts](Docs/en-us/01-core-concepts.md) | Component tree, lifecycle, flexbox, events, State, UIStateBus, animation |
+| [02 - Remote Assets](Docs/en-us/02-remote-assets.md) | RemoteResourceManager, URL loading, cache management, limitations |
+| [03 - Networking & Sync](Docs/en-us/03-networking-and-sync.md) | Sided proxies, server-optional handshake, container sync, IGuiActionSender |
+| [04 - Responsive Layout](Docs/en-us/04-responsive-layout-and-scaling.md) | GUI Scale 1x-4x adaptation, percentage sizing, adaptive grid, scrollbars |
+| [05 - Graphics & Rendering](Docs/en-us/05-graphics-and-rendering.md) | IGraphics abstraction, state stack, primitives, CCW vertex winding |
+| [06 - Vector Typography](Docs/en-us/06-typography-and-fonts.md) | IFont, TrueTypeFont rasterization, FontRegistry, F3+T hot-reloading |
+| [07 - GUI Overlays & Injection](Docs/en-us/07-gui-overlays-and-injection.md) | Non-intrusive screen injection, GuiOverlayManager, OverlayDockManager |
+| [08 - Integrations & Best Practices](Docs/en-us/08-integrations-and-best-practices.md) | JEI support, UIStateBus, ThemeRegistry, definitive what to avoid table |
+| [Buttons & Inputs](Docs/en-us/components/buttons-and-inputs.md) | GuiButton, GuiTextInput, GuiToggle, typed modular GuiSlider |
+| [Containers & Panels](Docs/en-us/components/containers-and-panels.md) | GuiPanel, GuiScrollPanel with sticky sessions, GuiVirtualList, GuiSlot |
+| [Multimedia](Docs/en-us/components/multimedia.md) | GuiImage (9-slice), animated GuiSprite engine, GuiVideo, GuiAudio |
+| [Advanced Components](Docs/en-us/components/advanced-components.md) | GuiMarkdown, GuiModelRender with Z-buffer, scrollable GuiDropdown, Tooltips |
 
 ### License
 
@@ -147,7 +152,7 @@ repositories {
 }
 
 dependencies {
-    deobfCompile "com.x4yi:X4UI-1.12.2:1.0b4"
+    deobfCompile "com.x4yi:X4UI-1.12.2:1.0b5"
 }
 ```
 
@@ -189,14 +194,19 @@ Minecraft.getMinecraft().displayGuiScreen(new MyScreen(Minecraft.getMinecraft().
 
 | Documento | Descripción |
 |-----------|-------------|
-| [00 - Primeros Pasos](Docs/es-latam/00-getting-started.md) | Instalación, creación de pantallas, builder API, temas |
-| [01 - Conceptos Core](Docs/es-latam/01-core-concepts.md) | Árbol de componentes, coordenadas, flexbox, eventos, State, temas, animación |
-| [02 - Assets Remotos](Docs/es-latam/02-remote-assets.md) | RemoteResourceManager, carga por URL, gestión de caché |
-| [03 - Red y Sincronización](Docs/es-latam/03-networking-and-sync.md) | Red Forge, apertura de GUI desde servidor, sincronización de contenedor |
-| [Botones e Inputs](Docs/es-latam/components/buttons-and-inputs.md) | GuiButton, GuiTextInput, GuiToggle, GuiSlider |
-| [Contenedores y Paneles](Docs/es-latam/components/containers-and-panels.md) | GuiPanel, GuiScrollPanel, GuiVirtualList, GuiSlot |
-| [Multimedia](Docs/es-latam/components/multimedia.md) | GuiImage, GuiSprite, GuiVideo, GuiAudio |
-| [Componentes Avanzados](Docs/es-latam/components/advanced-components.md) | GuiMarkdown, GuiModelRender, GuiDropdown, Tooltips |
+| [00 - Primeros Pasos](Docs/es-latam/00-getting-started.md) | Instalación, creación de pantallas, API fluida, temas, qué evitar |
+| [01 - Conceptos Fundamentales](Docs/es-latam/01-core-concepts.md) | Árbol de componentes, ciclo de vida, flexbox, eventos, State, UIStateBus |
+| [02 - Recursos Remotos](Docs/es-latam/02-remote-assets.md) | RemoteResourceManager, carga asíncrona por URL, gestión de caché |
+| [03 - Red y Sincronización](Docs/es-latam/03-networking-and-sync.md) | Proxies sided, conexión server-optional, sincronización con contenedor |
+| [04 - Diseño Responsivo](Docs/es-latam/04-responsive-layout-and-scaling.md) | Adaptación a GUI Scale 1x-4x, porcentajes, cuadrícula y scrollbars |
+| [05 - Abstracción Gráfica](Docs/es-latam/05-graphics-and-rendering.md) | Capa IGraphics, pila de estados, primitivas, bobinado de vértices CCW |
+| [06 - Tipografía Vectorial](Docs/es-latam/06-typography-and-fonts.md) | IFont, rasterizador TrueTypeFont, FontRegistry, recarga F3+T |
+| [07 - Superposiciones en GUI](Docs/es-latam/07-gui-overlays-and-injection.md) | Inyección no intrusiva en pantallas, GuiOverlayManager, acoplamiento |
+| [08 - Integraciones y Mejores Prácticas](Docs/es-latam/08-integrations-and-best-practices.md) | JEI nativo, UIStateBus, ThemeRegistry, tabla definitiva de qué evitar |
+| [Botones e Inputs](Docs/es-latam/components/buttons-and-inputs.md) | GuiButton, GuiTextInput, GuiToggle, GuiSlider tipado y modular |
+| [Contenedores y Paneles](Docs/es-latam/components/containers-and-panels.md) | GuiPanel, GuiScrollPanel con scroll sticky, GuiVirtualList, GuiSlot |
+| [Multimedia](Docs/es-latam/components/multimedia.md) | GuiImage (9-slice), motor de GuiSprite animado, GuiVideo, GuiAudio |
+| [Componentes Avanzados](Docs/es-latam/components/advanced-components.md) | GuiMarkdown, GuiModelRender con Z-buffer, GuiDropdown con scroll, Tooltips |
 
 ### Licencia
 

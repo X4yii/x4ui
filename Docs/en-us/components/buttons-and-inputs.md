@@ -1,423 +1,70 @@
 # Buttons and Inputs
 
-This document covers the interactive input components: `GuiButton`, `GuiTextInput`, `GuiToggle`, `GuiSlider` (component-level), and the typed slider variants (`GuiSliderInt`, `GuiSliderFloat`, `GuiSliderDouble`).
-
----
+Primary interaction components are designed to fully leverage the **Fluent API** and eliminate the need to clutter the code with repetitive setter calls.
 
 ## GuiButton
 
-A clickable button with animated hover state, centered text, and click sound.
-
-**Package:** `com.x4yi.x4ui.client.gui.component.GuiButton`
-
-### Constructor
+The classic interactive button. Secondary visual properties and variants are configured through fluent builders:
 
 ```java
-new GuiButton(int x, int y, int width, int height, String text, Runnable onClick)
-```
-
-The `onClick` callback is invoked on left-click. Pass `null` to handle clicks via override.
-
-### Basic Usage
-
-```java
-import com.x4yi.x4ui.client.gui.component.GuiButton;
-
-GuiButton saveBtn = new GuiButton(10, 10, 120, 25, "Save", () -> {
+GuiButton btn = (GuiButton) new GuiButton(0, 0, 0, 20, "Save", () -> {
     System.out.println("Saved!");
-});
-
-rootPanel.addChild(saveBtn);
+})
+.withPercentWidth(1.0f)                           // Responsive sizing
+.withVariant(GuiButton.Variant.SUCCESS)            // Visual variant from theme (DEFAULT, PRIMARY, SECONDARY, SUCCESS, DANGER, GHOST)
+.withTooltip("Saves changes permanently");         // Instant hover tooltip
 ```
 
-### Dynamic Text
+## Text Inputs (GuiTextInput)
+
+`GuiTextInput` internally handles focus, blinking cursor rendering, text selection, and clipboard operations.
 
 ```java
-GuiButton toggleBtn = new GuiButton(10, 40, 120, 25, "Enable", null);
+GuiTextInput nameInput = (GuiTextInput) new GuiTextInput(0, 0, 0, 20, "")
+    .withPercentWidth(1.0f);
 
-toggleBtn.setOnClick(() -> {
-    if ("Enable".equals(toggleBtn.getText())) {
-        toggleBtn.setText("Disable");
-    } else {
-        toggleBtn.setText("Enable");
-    }
-});
-```
-
-### Disabled State
-
-```java
-GuiButton disabledBtn = new GuiButton(10, 70, 120, 25, "Disabled", null);
-disabledBtn.setEnabled(false);
-```
-
-Disabled buttons render with the theme's disabled text color and do not respond to clicks.
-
-### With Tooltip
-
-```java
-GuiButton tooltipBtn = new GuiButton(10, 100, 120, 25, "Hover Me", null);
-tooltipBtn.setTooltip("This button does something important");
-```
-
-### In a Flex Layout
-
-```java
-import com.x4yi.x4ui.client.gui.component.GuiPanel;
-import com.x4yi.x4ui.client.gui.component.layout.FlexDirection;
-
-GuiPanel menu = new GuiPanel(10, 10, 200, 200);
-menu.setFlexDirection(FlexDirection.VERTICAL);
-menu.setGap(5);
-
-menu.addChild(new GuiButton(0, 0, 180, 20, "Option 1", () -> {}));
-menu.addChild(new GuiButton(0, 0, 180, 20, "Option 2", () -> {}));
-menu.addChild(new GuiButton(0, 0, 180, 20, "Option 3", () -> {}));
-```
-
-### Via GuiBuilder
-
-```java
-import com.x4yi.x4ui.client.gui.utils.GuiBuilder;
-
-GuiButton btn = GuiBuilder.createButton("Built Button")
-    .position(10, 10)
-    .size(120, 25)
-    .tooltip("Built with GuiBuilder")
-    .onClick(() -> System.out.println("Clicked!"))
-    .build();
-```
-
-### Properties
-
-| Method | Type | Description |
-|--------|------|-------------|
-| `getText()` | `String` | Returns button text |
-| `setText(String)` | `void` | Updates button text |
-| `setOnClick(Runnable)` | `void` | Sets the click callback |
-
-### Rendering
-
-- Background color: `lerpColor(theme.getButtonBackgroundColor(), theme.getButtonHoverColor(), hoverLerp)`
-- Border: `lerpColor(theme.getBackgroundColor(), theme.getPrimaryColor(), hoverLerp)`
-- Text: `theme.getTextColor()` when enabled, `theme.getDisabledTextColor()` when disabled
-- Hover animation: `hoverLerp` interpolates 0→1 over time using delta time
-
----
-
-## GuiTextInput
-
-A full-featured text input field with cursor, selection, clipboard operations, placeholder text, and submit key handling.
-
-**Package:** `com.x4yi.x4ui.client.gui.component.GuiTextInput`
-
-### Constructor
-
-```java
-new GuiTextInput(int x, int y, int width, int height)
-```
-
-### Basic Usage
-
-```java
-import com.x4yi.x4ui.client.gui.component.GuiTextInput;
-
-GuiTextInput nameInput = new GuiTextInput(10, 10, 200, 20);
+// Configure placeholder
 nameInput.setPlaceholder("Enter your name...");
-nameInput.setMaxLength(32);
 
-rootPanel.addChild(nameInput);
-```
-
-### Reading the Value
-
-```java
-String currentValue = nameInput.getText();
-```
-
-### Submit on Enter
-
-```java
-GuiTextInput searchInput = new GuiTextInput(10, 40, 200, 20);
-searchInput.setPlaceholder("Search...");
-searchInput.onEnter(() -> {
-    System.out.println("Searching for: " + searchInput.getText());
+// Listen for text changes
+nameInput.setOnTextChanged(text -> {
+    System.out.println("Current text: " + text);
 });
 ```
 
-### Custom Submit Key
+### Reactive States
+To bind `GuiTextInput` to a reactive `State<String>`:
 
 ```java
-import org.lwjgl.input.Keyboard;
-
-GuiTextInput tabInput = new GuiTextInput(10, 70, 200, 20);
-tabInput.setSubmitKey(Keyboard.KEY_TAB);
-tabInput.onEnter(() -> System.out.println("Tab pressed"));
-```
-
-### Programmatic Text Setting
-
-```java
-GuiTextInput field = new GuiTextInput(10, 100, 200, 20);
-field.setText("Initial value");
-```
-
-### Keyboard Shortcuts
-
-The text input supports:
-- **Ctrl+A** -- Select all
-- **Ctrl+C** -- Copy selection to clipboard
-- **Ctrl+V** -- Paste from clipboard
-- **Ctrl+X** -- Cut selection to clipboard
-- **Backspace** -- Delete character before cursor (Ctrl+Backspace deletes word)
-- **Delete** -- Delete character after cursor
-- **Left/Right arrows** -- Move cursor (Shift+Arrow for selection)
-- **Home/End** -- Move to start/end of text
-
-### Focus Behavior
-
-- Clicking the text input gives it focus
-- Clicking outside clears focus
-- Only one component can be focused at a time across the entire screen
-- Cursor blinks when focused (controlled by `cursorCounter`)
-
-### Properties
-
-| Method | Type | Description |
-|--------|------|-------------|
-| `getText()` | `String` | Returns current text |
-| `setText(String)` | `void` | Sets text and moves cursor to end |
-| `setPlaceholder(String)` | `void` | Sets placeholder text (shown when empty and unfocused) |
-| `setMaxLength(int)` | `void` | Sets maximum character count (default: 256) |
-| `setSubmitKey(int)` | `GuiTextInput` | Sets the key code that triggers submit (default: Enter) |
-| `onEnter(Runnable)` | `GuiTextInput` | Sets the submit callback |
-
----
-
-## GuiToggle
-
-An iOS-style toggle switch with animated color transition and ON/OFF badge.
-
-**Package:** `com.x4yi.x4ui.client.gui.component.GuiToggle`
-
-### Constructor
-
-```java
-new GuiToggle(int x, int y, int width, int height, String label, boolean defaultState, Consumer<Boolean> onStateChanged)
-```
-
-### Basic Usage
-
-```java
-import com.x4yi.x4ui.client.gui.component.GuiToggle;
-
-GuiToggle darkMode = new GuiToggle(10, 10, 150, 20, "Dark Mode", true, (enabled) -> {
-    System.out.println("Dark mode: " + enabled);
-});
-
-rootPanel.addChild(darkMode);
-```
-
-### Reading and Setting State
-
-```java
-boolean currentState = darkMode.getState();
-darkMode.setState(false);
-```
-
-### Dynamic Label
-
-```java
-GuiToggle volumeToggle = new GuiToggle(10, 40, 150, 20, "Sound", false, (on) -> {
-    volumeToggle.setLabel(on ? "Sound: ON" : "Sound: OFF");
+State<String> userName = new State<>("");
+nameInput.bindState(userName, txt -> {
+    nameInput.setText(txt);
 });
 ```
 
-### In a Flex Layout
+## Sliders and Toggles
+
+### Numeric Sliders (`GuiSliderInt`, `GuiSliderFloat`, `GuiSliderDouble`)
+
+Allow continuous value adjustments via mouse drag or keyboard navigation:
 
 ```java
-import com.x4yi.x4ui.client.gui.component.GuiPanel;
-import com.x4yi.x4ui.client.gui.component.layout.FlexDirection;
+GuiSliderInt volumeSlider = (GuiSliderInt) new GuiSliderInt(0, 0, 0, 20, 0, 100, 50, "Volume: ")
+    .withPercentWidth(1.0f);
 
-GuiPanel settings = new GuiPanel(10, 10, 200, 200);
-settings.setFlexDirection(FlexDirection.VERTICAL);
-settings.setGap(5);
-
-settings.addChild(new GuiToggle(0, 0, 180, 20, "Notifications", true, null));
-settings.addChild(new GuiToggle(0, 0, 180, 20, "Auto-save", false, null));
-settings.addChild(new GuiToggle(0, 0, 180, 20, "Sounds", true, null));
-```
-
-### Rendering
-
-- Badge: `lerpColor(0xFF424248, 0xFF00C853, animationLerp)` -- gray to green
-- Badge text: `lerpColor(0xFFA0A0A5, 0xFFFFFFFF, animationLerp)` -- shows "ON" or "OFF"
-- Label: `0xFFFFFFFF` when hovered, `0xFFB0B0BB` otherwise
-- Click sound: `SoundEvents.UI_BUTTON_CLICK`
-
-### Properties
-
-| Method | Type | Description |
-|--------|------|-------------|
-| `getState()` | `boolean` | Returns current toggle state |
-| `setState(boolean)` | `void` | Sets state (no callback triggered) |
-| `getLabel()` | `String` | Returns label text |
-| `setLabel(String)` | `void` | Updates label text |
-
----
-
-## GuiSlider (Component-Level)
-
-A compound slider with a label, draggable track, and an editable text field for direct value entry.
-
-**Package:** `com.x4yi.x4ui.client.gui.component.GuiSlider`
-
-### Constructors
-
-```java
-// Float mode
-new GuiSlider(int x, int y, int width, int height, String label, float min, float max, float current, Consumer<Float> onValueChanged)
-
-// Integer mode
-new GuiSlider(int x, int y, int width, int height, String label, float min, float max, float current, boolean isInt, Consumer<Float> onValueChanged)
-```
-
-### Basic Usage
-
-```java
-import com.x4yi.x4ui.client.gui.component.GuiSlider;
-
-// Float slider
-GuiSlider volumeSlider = new GuiSlider(10, 10, 200, 20, "Volume", 0f, 1f, 0.8f, (value) -> {
-    System.out.println("Volume: " + value);
+volumeSlider.setOnValueChanged(val -> {
+    System.out.println("New volume: " + val);
 });
+```
 
-// Integer slider
-GuiSlider countSlider = new GuiSlider(10, 40, 200, 20, "Count", 0, 100, 25, true, (value) -> {
-    System.out.println("Count: " + value.intValue());
+### Switches and Checkboxes (`GuiToggle`)
+
+`GuiToggle` provides a smooth, animated boolean switch with label support:
+
+```java
+GuiToggle showHUD = (GuiToggle) new GuiToggle(0, 0, 120, 20, "Show HUD", true);
+
+showHUD.setOnToggle(enabled -> {
+    System.out.println("HUD enabled: " + enabled);
 });
-
-rootPanel.addChild(volumeSlider);
-rootPanel.addChild(countSlider);
 ```
-
-### Reading and Setting Value
-
-```java
-float currentValue = volumeSlider.getValue();
-volumeSlider.setValue(0.5f);
-```
-
-### Properties
-
-| Method | Type | Description |
-|--------|------|-------------|
-| `getValue()` | `float` | Returns current value |
-| `setValue(float)` | `void` | Sets value and updates UI |
-| `getLabel()` | `String` | Returns label text |
-| `setLabel(String)` | `void` | Updates label text |
-| `setOnValueChanged(Consumer<Float>)` | `void` | Sets the change callback |
-
-### Rendering
-
-- Label: Drawn at the left of the component
-- Text field: Draws the current value, editable on click
-- Track: `theme.getSliderTrackColor()`
-- Fill: `theme.getSliderFillColor()`, width proportional to value
-- Handle: `theme.getSliderHandleColor()` (or `getSliderHandleHoverColor()` when hovered)
-
-### Behavior
-
-- Dragging the slider track updates the value in real time
-- Clicking the text field allows direct numeric input
-- Enter key in the text field applies the typed value
-- Only one text field is active globally (tracked via static `activeTextField`)
-
----
-
-## Typed Sliders (`GuiSliderInt`, `GuiSliderFloat`, `GuiSliderDouble`)
-
-Type-safe slider variants that use `State<T>` for reactive binding. These are simpler than the component-level `GuiSlider` (no label or text field).
-
-**Package:** `com.x4yi.x4ui.client.gui.component.slider`
-
-### GuiSliderInt
-
-```java
-import com.x4yi.x4ui.client.gui.component.slider.GuiSliderInt;
-import com.x4yi.x4ui.common.State;
-
-State<Integer> volume = new State<>(50);
-
-GuiSliderInt slider = new GuiSliderInt(10, 10, 150, 15, volume, 0, 100, 5);
-rootPanel.addChild(slider);
-
-// Listen for changes
-volume.addListener(v -> System.out.println("Volume: " + v));
-```
-
-### GuiSliderFloat
-
-```java
-import com.x4yi.x4ui.client.gui.component.slider.GuiSliderFloat;
-import com.x4yi.x4ui.common.State;
-
-State<Float> brightness = new State<>(0.75f);
-
-GuiSliderFloat slider = new GuiSliderFloat(10, 30, 150, 15, brightness, 0f, 1f, 0.05f);
-rootPanel.addChild(slider);
-```
-
-### GuiSliderDouble
-
-```java
-import com.x4yi.x4ui.client.gui.component.slider.GuiSliderDouble;
-import com.x4yi.x4ui.common.State;
-
-State<Double> precision = new State<>(3.14);
-
-GuiSliderDouble slider = new GuiSliderDouble(10, 50, 150, 15, precision, 0.0, 10.0, 0.01);
-rootPanel.addChild(slider);
-```
-
-### Via GuiBuilder
-
-```java
-import com.x4yi.x4ui.client.gui.utils.GuiBuilder;
-import com.x4yi.x4ui.common.State;
-
-State<Integer> speed = new State<>(10);
-
-GuiSliderInt slider = GuiBuilder.createSliderInt(speed, 1, 50, 1)
-    .position(10, 10)
-    .size(150, 15)
-    .build();
-```
-
-### Constructor
-
-```java
-new GuiSliderInt(int x, int y, int width, int height, State<Integer> state, int min, int max, int step)
-new GuiSliderFloat(int x, int y, int width, int height, State<Float> state, float min, float max, float step)
-new GuiSliderDouble(int x, int y, int width, int height, State<Double> state, double min, double max, double step)
-```
-
-### Properties
-
-| Method | Type | Description |
-|--------|------|-------------|
-| `getState()` | `State<T>` | Returns the bound state |
-| `setHorizontal(boolean)` | `void` | Sets horizontal (default) or vertical orientation |
-
-### Rendering
-
-- Track: `theme.getSliderTrackColor()`
-- Fill: `theme.getSliderFillColor()`, width proportional to percentage
-- Handle: `theme.getSliderHandleColor()` (or `getSliderHandleHoverColor()` when hovered)
-
-### Behavior
-
-- Drag the handle to change the value
-- Value snaps to the nearest `step` increment
-- Value is clamped to `[min, max]`
-- Changes propagate through the `State<T>` to all listeners

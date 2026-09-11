@@ -1,93 +1,248 @@
 package com.x4yi.x4ui.client.gui.component;
-import net.minecraft.client.renderer.GlStateManager;
-import net.minecraft.client.renderer.Tessellator;
-import net.minecraft.client.renderer.BufferBuilder;
-import net.minecraft.client.renderer.vertex.DefaultVertexFormats;
+import com.x4yi.x4ui.api.client.gui.IGraphics;
+import com.x4yi.x4ui.client.gui.component.sprite.IAnimatable;
+import com.x4yi.x4ui.client.gui.component.sprite.ISpriteSource;
+import com.x4yi.x4ui.client.gui.component.sprite.LoopMode;
+import com.x4yi.x4ui.client.gui.component.sprite.SpriteSheetSource;
+import com.x4yi.x4ui.client.gui.component.sprite.SequenceSource;
+import com.x4yi.x4ui.client.gui.utils.Insets;
 import net.minecraft.util.ResourceLocation;
-public class GuiSprite extends GuiComponent {
-    private final ResourceLocation texture;
-    private final int textureWidth;
-    private final int textureHeight;
-    private int sliceSize = 4;
-    public GuiSprite(int x, int y, int width, int height, ResourceLocation texture, int textureWidth, int textureHeight) {
+import java.util.function.Consumer;
+public class GuiSprite extends GuiComponent implements IAnimatable {
+    private ISpriteSource source;
+    private float fps = 12.0f;
+    private LoopMode loopMode = LoopMode.LOOP;
+    private boolean playing = true;
+    private float elapsedTime = 0.0f;
+    private int currentFrame = 0;
+    private int pingPongDirection = 1;
+    private boolean flipX = false;
+    private boolean flipY = false;
+    private float uvScrollU = 0.0f;
+    private float uvScrollV = 0.0f;
+    private float uvScrollSpeedU = 0.0f;
+    private float uvScrollSpeedV = 0.0f;
+    private Consumer<Integer> onFrameChanged = null;
+    private Runnable onFinished = null;
+    private final float[] uvBuffer = new float[4];
+    public GuiSprite(int x, int y, int width, int height, ISpriteSource source) {
         super(x, y, width, height);
-        this.texture = texture;
-        this.textureWidth = textureWidth;
-        this.textureHeight = textureHeight;
+        this.source = source;
     }
-    public GuiSprite setSliceSize(int size) {
-        this.sliceSize = size;
+    public static GuiSprite fromSheet(int x, int y, int width, int height, ResourceLocation texture, int texWidth, int texHeight, int frameWidth, int frameHeight) {
+        return new GuiSprite(x, y, width, height, new SpriteSheetSource(texture, texWidth, texHeight, frameWidth, frameHeight));
+    }
+    public static GuiSprite fromSheet(int x, int y, int width, int height, ResourceLocation texture, int texWidth, int texHeight, int frameWidth, int frameHeight, int totalFrames) {
+        return new GuiSprite(x, y, width, height, new SpriteSheetSource(texture, texWidth, texHeight, frameWidth, frameHeight, totalFrames));
+    }
+    public static GuiSprite fromSequence(int x, int y, int width, int height, ResourceLocation[] frames, int frameWidth, int frameHeight) {
+        return new GuiSprite(x, y, width, height, new SequenceSource(frames, frameWidth, frameHeight));
+    }
+    public ISpriteSource getSource() {
+        return source;
+    }
+    public GuiSprite setSource(ISpriteSource source) {
+        this.source = source;
+        reset();
         return this;
     }
     @Override
-    protected void renderSelf(int mouseX, int mouseY, float partialTicks) {
-        if (texture == null) return;
-        mc.getTextureManager().bindTexture(texture);
-        GlStateManager.enableTexture2D();
-        GlStateManager.enableBlend();
-        GlStateManager.tryBlendFuncSeparate(
-            GlStateManager.SourceFactor.SRC_ALPHA,
-            GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA,
-            GlStateManager.SourceFactor.ONE,
-            GlStateManager.DestFactor.ZERO
-        );
-        GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
-
-        int absX = getAbsoluteX();
-        int absY = getAbsoluteY();
-        int w = this.width;
-        int h = this.height;
-        int s = this.sliceSize;
-
-        Tessellator tessellator = Tessellator.getInstance();
-        BufferBuilder bb = tessellator.getBuffer();
-        bb.begin(7, DefaultVertexFormats.POSITION_TEX);
-
-        if (s * 2 > w || s * 2 > h) {
-            addQuad(bb, absX, absY, w, h, 0, 0, 1, 1);
-            tessellator.draw();
+    public void play() {
+        this.playing = true;
+    }
+    @Override
+    public void pause() {
+        this.playing = false;
+    }
+    @Override
+    public void stop() {
+        this.playing = false;
+        reset();
+    }
+    @Override
+    public void reset() {
+        this.elapsedTime = 0.0f;
+        this.pingPongDirection = 1;
+        setFrameInternal(0);
+    }
+    @Override
+    public boolean isPlaying() {
+        return playing;
+    }
+    @Override
+    public void setFPS(float fps) {
+        this.fps = Math.max(0.001f, fps);
+    }
+    public GuiSprite withFPS(float fps) {
+        setFPS(fps);
+        return this;
+    }
+    @Override
+    public float getFPS() {
+        return fps;
+    }
+    @Override
+    public void setFrame(int frame) {
+        int total = getTotalFrames();
+        if (total <= 0) {
+            setFrameInternal(0);
             return;
         }
-
-        float u1 = 0;
-        float u2 = (float) s / textureWidth;
-        float u3 = (float) (textureWidth - s) / textureWidth;
-        float u4 = 1.0f;
-        float v1 = 0;
-        float v2 = (float) s / textureHeight;
-        float v3 = (float) (textureHeight - s) / textureHeight;
-        float v4 = 1.0f;
-
-        // 4 corners
-        addQuad(bb, absX, absY, s, s, u1, v1, u2, v2);
-        addQuad(bb, absX + w - s, absY, s, s, u3, v1, u4, v2);
-        addQuad(bb, absX, absY + h - s, s, s, u1, v3, u2, v4);
-        addQuad(bb, absX + w - s, absY + h - s, s, s, u3, v3, u4, v4);
-
-        // 4 edges
-        addQuad(bb, absX + s, absY, w - (s * 2), s, u2, v1, u3, v2);
-        addQuad(bb, absX + s, absY + h - s, w - (s * 2), s, u2, v3, u3, v4);
-        addQuad(bb, absX, absY + s, s, h - (s * 2), u1, v2, u2, v3);
-        addQuad(bb, absX + w - s, absY + s, s, h - (s * 2), u3, v2, u4, v3);
-
-        // Center
-        addQuad(bb, absX + s, absY + s, w - (s * 2), h - (s * 2), u2, v2, u3, v3);
-
-        tessellator.draw();
+        setFrameInternal(Math.max(0, Math.min(frame, total - 1)));
     }
-
-    private static void addQuad(BufferBuilder bb, int x, int y, int width, int height, float u1, float v1, float u2, float v2) {
-        bb.pos(x, y + height, 0.0D).tex(u1, v2).endVertex();
-        bb.pos(x + width, y + height, 0.0D).tex(u2, v2).endVertex();
-        bb.pos(x + width, y, 0.0D).tex(u2, v1).endVertex();
-        bb.pos(x, y, 0.0D).tex(u1, v1).endVertex();
+    public GuiSprite withFrame(int frame) {
+        setFrame(frame);
+        return this;
     }
-
-    public static void drawTexturedRect(int x, int y, int width, int height, float u1, float v1, float u2, float v2) {
-        Tessellator tessellator = Tessellator.getInstance();
-        BufferBuilder bufferbuilder = tessellator.getBuffer();
-        bufferbuilder.begin(7, DefaultVertexFormats.POSITION_TEX);
-        addQuad(bufferbuilder, x, y, width, height, u1, v1, u2, v2);
-        tessellator.draw();
+    @Override
+    public int getCurrentFrame() {
+        return currentFrame;
+    }
+    @Override
+    public int getTotalFrames() {
+        return source != null ? source.getFrameCount() : 0;
+    }
+    @Override
+    public void setLoopMode(LoopMode mode) {
+        this.loopMode = mode != null ? mode : LoopMode.LOOP;
+    }
+    public GuiSprite withLoopMode(LoopMode mode) {
+        setLoopMode(mode);
+        return this;
+    }
+    @Override
+    public LoopMode getLoopMode() {
+        return loopMode;
+    }
+    public boolean isFlipX() {
+        return flipX;
+    }
+    public void setFlipX(boolean flipX) {
+        this.flipX = flipX;
+    }
+    public GuiSprite withFlipX(boolean flipX) {
+        setFlipX(flipX);
+        return this;
+    }
+    public boolean isFlipY() {
+        return flipY;
+    }
+    public void setFlipY(boolean flipY) {
+        this.flipY = flipY;
+    }
+    public GuiSprite withFlipY(boolean flipY) {
+        setFlipY(flipY);
+        return this;
+    }
+    public void setUVScrollSpeed(float speedU, float speedV) {
+        this.uvScrollSpeedU = speedU;
+        this.uvScrollSpeedV = speedV;
+    }
+    public GuiSprite withUVScrollSpeed(float speedU, float speedV) {
+        setUVScrollSpeed(speedU, speedV);
+        return this;
+    }
+    public void setOnFrameChanged(Consumer<Integer> onFrameChanged) {
+        this.onFrameChanged = onFrameChanged;
+    }
+    public GuiSprite withOnFrameChanged(Consumer<Integer> onFrameChanged) {
+        setOnFrameChanged(onFrameChanged);
+        return this;
+    }
+    public void setOnFinished(Runnable onFinished) {
+        this.onFinished = onFinished;
+    }
+    public GuiSprite withOnFinished(Runnable onFinished) {
+        setOnFinished(onFinished);
+        return this;
+    }
+    private void setFrameInternal(int frame) {
+        if (this.currentFrame != frame) {
+            this.currentFrame = frame;
+            if (onFrameChanged != null) {
+                onFrameChanged.accept(frame);
+            }
+        }
+    }
+    @Override
+    public void update(float deltaTime) {
+        super.update(deltaTime);
+        if (uvScrollSpeedU != 0.0f) {
+            uvScrollU += uvScrollSpeedU * deltaTime;
+        }
+        if (uvScrollSpeedV != 0.0f) {
+            uvScrollV += uvScrollSpeedV * deltaTime;
+        }
+        int totalFrames = getTotalFrames();
+        if (!playing || totalFrames <= 1 || fps <= 0 || loopMode == LoopMode.MANUAL) {
+            return;
+        }
+        elapsedTime += deltaTime;
+        float frameDuration = 1.0f / fps;
+        while (elapsedTime >= frameDuration) {
+            elapsedTime -= frameDuration;
+            advanceFrame(totalFrames);
+            if (!playing) break;
+        }
+    }
+    private void advanceFrame(int totalFrames) {
+        switch (loopMode) {
+            case LOOP:
+                int nextLoop = (currentFrame + 1) % totalFrames;
+                setFrameInternal(nextLoop);
+                break;
+            case ONCE:
+                if (currentFrame < totalFrames - 1) {
+                    setFrameInternal(currentFrame + 1);
+                } else {
+                    playing = false;
+                    if (onFinished != null) {
+                        onFinished.run();
+                    }
+                }
+                break;
+            case PING_PONG:
+                int nextPingPong = currentFrame + pingPongDirection;
+                if (nextPingPong >= totalFrames) {
+                    pingPongDirection = -1;
+                    nextPingPong = Math.max(0, totalFrames - 2);
+                } else if (nextPingPong < 0) {
+                    pingPongDirection = 1;
+                    nextPingPong = Math.min(totalFrames - 1, 1);
+                }
+                setFrameInternal(nextPingPong);
+                break;
+            case MANUAL:
+            default:
+                break;
+        }
+    }
+    @Override
+    protected void renderSelf(IGraphics gfx, int mouseX, int mouseY, float partialTicks) {
+        int absX = getAbsoluteX();
+        int absY = getAbsoluteY();
+        if (source == null || getTotalFrames() <= 0) {
+            return;
+        }
+        ResourceLocation tex = source.getTexture(currentFrame);
+        if (tex == null) {
+            return;
+        }
+        source.getUV(currentFrame, uvBuffer);
+        float u = uvBuffer[0] + uvScrollU;
+        float v = uvBuffer[1] + uvScrollV;
+        float uWidth = uvBuffer[2];
+        float vHeight = uvBuffer[3];
+        int texW = source.getTextureWidth(currentFrame);
+        int texH = source.getTextureHeight(currentFrame);
+        if (flipX) {
+            u = u + uWidth;
+            uWidth = -uWidth;
+        }
+        if (flipY) {
+            v = v + vHeight;
+            vHeight = -vHeight;
+        }
+        gfx.drawTextureRegion(tex, absX, absY, width, height, u, v, uWidth, vHeight, texW, texH);
     }
 }

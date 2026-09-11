@@ -7,11 +7,11 @@ public class GuiTooltip extends GuiPanel {
         this.setFlexDirection(FlexDirection.VERTICAL);
     }
     @Override
-    protected void renderSelf(int mouseX, int mouseY, float partialTicks) {
+    protected void renderSelf(com.x4yi.x4ui.api.client.gui.IGraphics gfx, int mouseX, int mouseY, float partialTicks) {
         int absX = getAbsoluteX();
         int absY = getAbsoluteY();
         ITheme theme = getTheme();
-        drawBorder(absX, absY, absX + width, absY + height, theme.getTooltipBorderColor());
-        drawRect(absX + 1, absY + 1, absX + width - 1, absY + height - 1, theme.getTooltipBackgroundColor());
+        gfx.drawBorder(absX, absY, width, height, 1, theme.getTooltipBorderColor());
+        gfx.drawRect(absX + 1, absY + 1, width - 2, height - 2, theme.getTooltipBackgroundColor());
     }
 }

@@ -64,89 +64,105 @@ public class GuiModelRender extends GuiComponent {
         return this;
     }
     @Override
-    protected void renderSelf(int mouseX, int mouseY, float partialTicks) {
+    protected void renderSelf(com.x4yi.x4ui.api.client.gui.IGraphics gfx, int mouseX, int mouseY, float partialTicks) {
         int centerX = getAbsoluteX() + width / 2;
         int centerY = getAbsoluteY() + height / 2;
         if (itemStack != null && !itemStack.isEmpty()) {
-            GlStateManager.pushMatrix();
-            GlStateManager.translate(centerX + offsetX, centerY + offsetY, offsetZ);
-            float itemScale = scale / 16.0f;
-            GlStateManager.scale(itemScale, itemScale, 1.0f);
-            RenderHelper.enableGUIStandardItemLighting();
-            Minecraft.getMinecraft().getRenderItem().renderItemAndEffectIntoGUI(itemStack, -8, -8);
-            RenderHelper.disableStandardItemLighting();
-            GlStateManager.popMatrix();
+            gfx.renderCustom(client -> {
+                GlStateManager.pushMatrix();
+                GlStateManager.enableDepth();
+                GlStateManager.depthMask(true);
+                GlStateManager.depthFunc(org.lwjgl.opengl.GL11.GL_LEQUAL);
+                GlStateManager.clear(org.lwjgl.opengl.GL11.GL_DEPTH_BUFFER_BIT);
+                GlStateManager.translate(centerX + offsetX, centerY + offsetY, offsetZ);
+                float itemScale = scale / 16.0f;
+                GlStateManager.scale(itemScale, itemScale, 1.0f);
+                RenderHelper.enableGUIStandardItemLighting();
+                Minecraft.getMinecraft().getRenderItem().renderItemAndEffectIntoGUI(itemStack, -8, -8);
+                RenderHelper.disableStandardItemLighting();
+                GlStateManager.disableDepth();
+                GlStateManager.popMatrix();
+            });
             return;
         }
-
         if (entity != null) {
-            GlStateManager.pushMatrix();
-            GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
-            GlStateManager.enableColorMaterial();
-            GlStateManager.translate(centerX + offsetX, centerY + offsetY, 50.0F + offsetZ);
-            GlStateManager.scale(-scale, scale, scale);
-            GlStateManager.rotate(180.0F, 0.0F, 0.0F, 1.0F);
-            float f = entity.renderYawOffset;
-            float fp = entity.prevRenderYawOffset;
-            float f1 = entity.rotationYaw;
-            float f1p = entity.prevRotationYaw;
-            float f2 = entity.rotationPitch;
-            float f2p = entity.prevRotationPitch;
-            float f3 = entity.prevRotationYawHead;
-            float f4 = entity.rotationYawHead;
-            if (lookAtCursor && !dragging) {
-                float mouseRelX = (float) centerX - mouseX;
-                float mouseRelY = (float) centerY - (scale * entity.getEyeHeight()) - mouseY;
-                GlStateManager.rotate(135.0F, 0.0F, 1.0F, 0.0F);
-                RenderHelper.enableStandardItemLighting();
-                GlStateManager.rotate(-135.0F, 0.0F, 1.0F, 0.0F);
-                GlStateManager.rotate(-((float) Math.atan((double) (mouseRelY / 40.0F))) * 20.0F, 1.0F, 0.0F, 0.0F);
-                entity.renderYawOffset = (float) Math.atan((double) (mouseRelX / 40.0F)) * 20.0F;
-                entity.prevRenderYawOffset = entity.renderYawOffset;
-                entity.rotationYaw = (float) Math.atan((double) (mouseRelX / 40.0F)) * 40.0F;
-                entity.prevRotationYaw = entity.rotationYaw;
-                entity.rotationPitch = -((float) Math.atan((double) (mouseRelY / 40.0F))) * 20.0F;
-                entity.prevRotationPitch = entity.rotationPitch;
-                entity.rotationYawHead = entity.rotationYaw;
-                entity.prevRotationYawHead = entity.rotationYaw;
-            } else {
-                GlStateManager.rotate(135.0F, 0.0F, 1.0F, 0.0F);
-                RenderHelper.enableStandardItemLighting();
-                GlStateManager.rotate(-135.0F, 0.0F, 1.0F, 0.0F);
-            }
-            GlStateManager.rotate(rotationX, 1.0F, 0.0F, 0.0F);
-            GlStateManager.rotate(rotationY, 0.0F, 1.0F, 0.0F);
-            GlStateManager.rotate(rotationZ, 0.0F, 0.0F, 1.0F);
-            
-            if (!enableEntityAnimations && !lookAtCursor) {
-                entity.renderYawOffset = 0;
-                entity.rotationYaw = 0;
-                entity.rotationPitch = 0;
-                entity.rotationYawHead = 0;
-                entity.prevRotationYawHead = 0;
-            }
-            RenderManager rendermanager = Minecraft.getMinecraft().getRenderManager();
-            rendermanager.setPlayerViewY(180.0F);
-            rendermanager.setRenderShadow(false);
-            rendermanager.renderEntity(entity, 0.0D, 0.0D, 0.0D, 0.0F, enableEntityAnimations ? partialTicks : 1.0F, false);
-            rendermanager.setRenderShadow(true);
-            entity.renderYawOffset = f;
-            entity.prevRenderYawOffset = fp;
-            entity.rotationYaw = f1;
-            entity.prevRotationYaw = f1p;
-            entity.rotationPitch = f2;
-            entity.prevRotationPitch = f2p;
-            entity.prevRotationYawHead = f3;
-            entity.rotationYawHead = f4;
-
-            RenderHelper.disableStandardItemLighting();
-            GlStateManager.disableRescaleNormal();
-            GlStateManager.disableColorMaterial();
-            GlStateManager.setActiveTexture(OpenGlHelper.lightmapTexUnit);
-            GlStateManager.disableTexture2D();
-            GlStateManager.setActiveTexture(OpenGlHelper.defaultTexUnit);
-            GlStateManager.disableDepth();
-            GlStateManager.popMatrix();
+            gfx.renderCustom(client -> {
+                GlStateManager.enableColorMaterial();
+                GlStateManager.enableDepth();
+                GlStateManager.depthMask(true);
+                GlStateManager.depthFunc(org.lwjgl.opengl.GL11.GL_LEQUAL);
+                GlStateManager.clear(org.lwjgl.opengl.GL11.GL_DEPTH_BUFFER_BIT);
+                GlStateManager.enableRescaleNormal();
+                GlStateManager.pushMatrix();
+                GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);
+                GlStateManager.translate(centerX + offsetX, centerY + offsetY, 50.0F + offsetZ);
+                GlStateManager.scale(-scale, scale, scale);
+                GlStateManager.rotate(180.0F, 0.0F, 0.0F, 1.0F);
+                float f = entity.renderYawOffset;
+                float fp = entity.prevRenderYawOffset;
+                float f1 = entity.rotationYaw;
+                float f1p = entity.prevRotationYaw;
+                float f2 = entity.rotationPitch;
+                float f2p = entity.prevRotationPitch;
+                float f3 = entity.prevRotationYawHead;
+                float f4 = entity.rotationYawHead;
+                if (lookAtCursor && !dragging) {
+                    float mouseRelX = (float) centerX - mouseX;
+                    float mouseRelY = (float) centerY - (scale * entity.getEyeHeight()) - mouseY;
+                    GlStateManager.rotate(135.0F, 0.0F, 1.0F, 0.0F);
+                    RenderHelper.enableStandardItemLighting();
+                    GlStateManager.rotate(-135.0F, 0.0F, 1.0F, 0.0F);
+                    GlStateManager.rotate(-((float) Math.atan((double) (mouseRelY / 40.0F))) * 20.0F, 1.0F, 0.0F, 0.0F);
+                    entity.renderYawOffset = (float) Math.atan((double) (mouseRelX / 40.0F)) * 20.0F;
+                    entity.prevRenderYawOffset = entity.renderYawOffset;
+                    entity.rotationYaw = (float) Math.atan((double) (mouseRelX / 40.0F)) * 40.0F;
+                    entity.prevRotationYaw = entity.rotationYaw;
+                    entity.rotationPitch = -((float) Math.atan((double) (mouseRelY / 40.0F))) * 20.0F;
+                    entity.prevRotationPitch = entity.rotationPitch;
+                    entity.rotationYawHead = entity.rotationYaw;
+                    entity.prevRotationYawHead = entity.rotationYaw;
+                } else {
+                    GlStateManager.rotate(135.0F, 0.0F, 1.0F, 0.0F);
+                    RenderHelper.enableStandardItemLighting();
+                    GlStateManager.rotate(-135.0F, 0.0F, 1.0F, 0.0F);
+                }
+                GlStateManager.rotate(rotationX, 1.0F, 0.0F, 0.0F);
+                GlStateManager.rotate(rotationY, 0.0F, 1.0F, 0.0F);
+                GlStateManager.rotate(rotationZ, 0.0F, 0.0F, 1.0F);
+                if (!enableEntityAnimations && !lookAtCursor) {
+                    entity.renderYawOffset = 0;
+                    entity.rotationYaw = 0;
+                    entity.rotationPitch = 0;
+                    entity.rotationYawHead = 0;
+                    entity.prevRotationYawHead = 0;
+                }
+                RenderManager rendermanager = Minecraft.getMinecraft().getRenderManager();
+                float prevViewY = rendermanager.playerViewY;
+                try {
+                    rendermanager.setPlayerViewY(180.0F);
+                    rendermanager.setRenderShadow(false);
+                    rendermanager.renderEntity(entity, 0.0D, 0.0D, 0.0D, 0.0F, enableEntityAnimations ? partialTicks : 1.0F, false);
+                    rendermanager.setRenderShadow(true);
+                } finally {
+                    rendermanager.setPlayerViewY(prevViewY);
+                }
+                entity.renderYawOffset = f;
+                entity.prevRenderYawOffset = fp;
+                entity.rotationYaw = f1;
+                entity.prevRotationYaw = f1p;
+                entity.rotationPitch = f2;
+                entity.prevRotationPitch = f2p;
+                entity.prevRotationYawHead = f3;
+                entity.rotationYawHead = f4;
+                GlStateManager.popMatrix();
+                RenderHelper.disableStandardItemLighting();
+                GlStateManager.disableRescaleNormal();
+                GlStateManager.disableColorMaterial();
+                GlStateManager.setActiveTexture(OpenGlHelper.lightmapTexUnit);
+                GlStateManager.disableTexture2D();
+                GlStateManager.setActiveTexture(OpenGlHelper.defaultTexUnit);
+                GlStateManager.disableDepth();
+            });
         }
     }
     @Override

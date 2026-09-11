@@ -1,4 +1,5 @@
 package com.x4yi.x4ui.client.gui.component;
+import com.x4yi.x4ui.api.client.font.IFont;
 public class GuiLabel extends GuiComponent {
     protected String text;
     protected int color;
@@ -8,7 +9,7 @@ public class GuiLabel extends GuiComponent {
         this.text = text;
         this.color = color;
         this.centered = false;
-        this.width = mc.fontRenderer.getStringWidth(text);
+        updateDimensions();
     }
     public GuiLabel setCentered(boolean centered) {
         this.centered = centered;
@@ -16,16 +17,45 @@ public class GuiLabel extends GuiComponent {
     }
     public void setText(String text) {
         this.text = text;
-        this.width = mc.fontRenderer.getStringWidth(text);
+        updateDimensions();
+    }
+    public GuiLabel setColor(int color) {
+        this.color = color;
+        return this;
+    }
+    public String getText() {
+        return text;
     }
     @Override
-    protected void renderSelf(int mouseX, int mouseY, float partialTicks) {
+    public GuiLabel withFont(IFont font) {
+        super.withFont(font);
+        updateDimensions();
+        return this;
+    }
+    @Override
+    public GuiLabel withFont(String fontName) {
+        super.withFont(fontName);
+        updateDimensions();
+        return this;
+    }
+    protected void updateDimensions() {
+        if (text != null) {
+            setWidth(getFont().getWidth(text));
+            setHeight(getFont().getHeight());
+        } else {
+            setWidth(0);
+            setHeight(getFont().getHeight());
+        }
+        requestLayout();
+    }
+    @Override
+    protected void renderSelf(com.x4yi.x4ui.api.client.gui.IGraphics gfx, int mouseX, int mouseY, float partialTicks) {
         int absX = getAbsoluteX();
         int absY = getAbsoluteY();
         if (centered) {
-            drawCenteredString(text, absX + width / 2, absY, color);
+            gfx.drawStringCentered(text, absX + width / 2.0f, absY, color, true);
         } else {
-            drawString(text, absX, absY, color);
+            gfx.drawString(text, absX, absY, color, true);
         }
     }
 }

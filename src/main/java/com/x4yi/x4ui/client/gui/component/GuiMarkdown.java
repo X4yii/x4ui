@@ -37,6 +37,18 @@ public class GuiMarkdown extends GuiComponent {
     public String getRawText() {
         return this.rawText;
     }
+    @Override
+    public GuiMarkdown withFont(com.x4yi.x4ui.api.client.font.IFont font) {
+        super.withFont(font);
+        parseAndLayout();
+        return this;
+    }
+    @Override
+    public GuiMarkdown withFont(String fontName) {
+        super.withFont(fontName);
+        parseAndLayout();
+        return this;
+    }
     public int getAnchorY(String id) {
         return anchors.getOrDefault(id, 0);
     }
@@ -45,7 +57,8 @@ public class GuiMarkdown extends GuiComponent {
         anchors.clear();
         this.height = 0;
         if (rawText == null || rawText.isEmpty()) return;
-        FontRenderer fr = Minecraft.getMinecraft().fontRenderer;
+        com.x4yi.x4ui.api.client.font.IFont font = getFont();
+        this.lineHeight = Math.max(10, font.getHeight() + 2);
         String[] lines = rawText.replace("\r", "").split("\n");
         int currentY = 0;
         for (String line : lines) {
@@ -74,24 +87,24 @@ public class GuiMarkdown extends GuiComponent {
             if (line.startsWith("### ")) {
                 String title = line.substring(4);
                 anchors.put(title.toLowerCase().replaceAll("[^a-z0-9]+", "-").replaceAll("^-|-$", ""), currentY);
-                currentY += addTextNode(fr, title, 0, currentY, width, colorH3, true, false, false);
+                currentY += addTextNode(font, title, 0, currentY, width, colorH3, true, false, false);
                 currentY += 4; continue;
             }
             if (line.startsWith("## ")) {
                 String title = line.substring(3);
                 anchors.put(title.toLowerCase().replaceAll("[^a-z0-9]+", "-").replaceAll("^-|-$", ""), currentY);
-                currentY += addTextNode(fr, title, 0, currentY, width, colorH2, true, false, false);
+                currentY += addTextNode(font, title, 0, currentY, width, colorH2, true, false, false);
                 currentY += 4; continue;
             }
             if (line.startsWith("# ")) {
                 String title = line.substring(2);
                 anchors.put(title.toLowerCase().replaceAll("[^a-z0-9]+", "-").replaceAll("^-|-$", ""), currentY);
-                currentY += addTextNode(fr, title, 0, currentY, width, colorH1, true, false, false);
+                currentY += addTextNode(font, title, 0, currentY, width, colorH1, true, false, false);
                 currentY += 6; continue;
             }
             if (line.startsWith("> ")) {
                 int startY = currentY;
-                int h = addTextNode(fr, line.substring(2), 8, currentY, width - 8, colorQuote, false, true, false);
+                int h = addTextNode(font, line.substring(2), 8, currentY, width - 8, colorQuote, false, true, false);
                 nodes.add(new BlockquoteBarNode(0, startY, 4, h));
                 currentY += 2;
                 continue;
@@ -106,16 +119,16 @@ public class GuiMarkdown extends GuiComponent {
                 rest = rest.substring(2);
                 int bx = indent * indentWidth;
                 nodes.add(new BulletNode(bx, currentY, indent));
-                currentY += addTextNode(fr, rest, bx + 12, currentY, width - bx - 12, textColor, false, false, false);
+                currentY += addTextNode(font, rest, bx + 12, currentY, width - bx - 12, textColor, false, false, false);
                 currentY += 2;
                 continue;
             }
-            currentY += addTextNode(fr, line, 0, currentY, width, textColor, false, false, false);
+            currentY += addTextNode(font, line, 0, currentY, width, textColor, false, false, false);
             currentY += 2;
         }
-        this.height = currentY;
+        setHeight(currentY);
     }
-    private int addTextNode(FontRenderer fr, String text, int startX, int startY, int maxW, int baseColor, boolean isHeading, boolean isQuote, boolean isCode) {
+    private int addTextNode(com.x4yi.x4ui.api.client.font.IFont font, String text, int startX, int startY, int maxW, int baseColor, boolean isHeading, boolean isQuote, boolean isCode) {
         TextNode tnode = new TextNode();
         int currX = startX;
         int currY = startY;
@@ -131,7 +144,7 @@ public class GuiMarkdown extends GuiComponent {
                 if (seg.isLink) color = colorLink;
                 if (seg.isCode) color = colorCode;
                 String formatted = mcFormat + token;
-                int w = com.x4yi.x4ui.client.gui.utils.FontWidthCache.getStringWidth(fr, formatted, "x4ui");
+                int w = font.getWidth(formatted);
                 if (!token.trim().isEmpty() && maxW > 0 && currX + w > startX + maxW) {
                     currX = startX;
                     currY += lineHeight;
@@ -201,15 +214,15 @@ public class GuiMarkdown extends GuiComponent {
         if (mouseButton == 0) {
             int absX = getAbsoluteX();
             int absY = getAbsoluteY();
-            FontRenderer fr = Minecraft.getMinecraft().fontRenderer;
+            com.x4yi.x4ui.api.client.font.IFont font = getFont();
             for (MarkdownNode node : nodes) {
                 if (node instanceof TextNode) {
                     for (RenderWord w : ((TextNode) node).words) {
                         if (w.isLink) {
-                            int sw = com.x4yi.x4ui.client.gui.utils.FontWidthCache.getStringWidth(fr, w.text, "x4ui");
+                            int sw = font.getWidth(w.text);
                             int tx = absX + w.x;
                             int ty = absY + w.y;
-                            if (mouseX >= tx && mouseX <= tx + sw && mouseY >= ty && mouseY <= ty + 10) {
+                            if (mouseX >= tx && mouseX <= tx + sw && mouseY >= ty && mouseY <= ty + font.getHeight()) {
                                 if (onLinkClicked != null && w.linkTarget != null) {
                                     onLinkClicked.accept(w.linkTarget);
                                 }
@@ -223,12 +236,11 @@ public class GuiMarkdown extends GuiComponent {
         return false;
     }
     @Override
-    protected void renderSelf(int mouseX, int mouseY, float partialTicks) {
+    protected void renderSelf(com.x4yi.x4ui.api.client.gui.IGraphics gfx, int mouseX, int mouseY, float partialTicks) {
         int absX = getAbsoluteX();
         int absY = getAbsoluteY();
-        FontRenderer fr = Minecraft.getMinecraft().fontRenderer;
         for (MarkdownNode node : nodes) {
-            node.draw(absX, absY, fr);
+            node.draw(gfx, absX, absY);
         }
     }
     private static class Segment {
@@ -246,17 +258,17 @@ public class GuiMarkdown extends GuiComponent {
         RenderWord(int x, int y, String text, int color, boolean isLink, String tgt) { this.x = x; this.y = y; this.text = text; this.color = color; this.isLink = isLink; this.linkTarget = tgt; }
     }
     private abstract class MarkdownNode {
-        abstract void draw(int absX, int absY, FontRenderer fr);
+        abstract void draw(com.x4yi.x4ui.api.client.gui.IGraphics gfx, int absX, int absY);
     }
     private class TextNode extends MarkdownNode {
         List<RenderWord> words = new ArrayList<>();
         @Override
-        void draw(int absX, int absY, FontRenderer fr) {
+        void draw(com.x4yi.x4ui.api.client.gui.IGraphics gfx, int absX, int absY) {
             for (RenderWord w : words) {
-                fr.drawString(w.text, absX + w.x, absY + w.y, w.color);
+                gfx.drawString(w.text, absX + w.x, absY + w.y, w.color, false);
                 if (w.isLink) {
-                    int sw = com.x4yi.x4ui.client.gui.utils.FontWidthCache.getStringWidth(fr, w.text, "x4ui");
-                    Gui.drawRect(absX + w.x, absY + w.y + 9, absX + w.x + sw, absY + w.y + 10, w.color);
+                    int sw = gfx.getStringWidth(w.text);
+                    gfx.drawRect(absX + w.x, absY + w.y + gfx.getFontHeight(), sw, 1, w.color);
                 }
             }
         }
@@ -265,28 +277,28 @@ public class GuiMarkdown extends GuiComponent {
         int x, y, w;
         SeparatorNode(int x, int y, int w) { this.x = x; this.y = y; this.w = w; }
         @Override
-        void draw(int absX, int absY, FontRenderer fr) {
-            Gui.drawRect(absX + x, absY + y + 4, absX + x + w, absY + y + 5, colorSep);
+        void draw(com.x4yi.x4ui.api.client.gui.IGraphics gfx, int absX, int absY) {
+            gfx.drawRect(absX + x, absY + y + 4, w, 1, colorSep);
         }
     }
     private class BlockquoteBarNode extends MarkdownNode {
         int x, y, w, h;
         BlockquoteBarNode(int x, int y, int w, int h) { this.x = x; this.y = y; this.w = w; this.h = h; }
         @Override
-        void draw(int absX, int absY, FontRenderer fr) {
-            Gui.drawRect(absX + x, absY + y, absX + x + w, absY + y + h, colorQuote);
+        void draw(com.x4yi.x4ui.api.client.gui.IGraphics gfx, int absX, int absY) {
+            gfx.drawRect(absX + x, absY + y, w, h, colorQuote);
         }
     }
     private class BulletNode extends MarkdownNode {
         int x, y, indent;
         BulletNode(int x, int y, int indent) { this.x = x; this.y = y; this.indent = indent; }
         @Override
-        void draw(int absX, int absY, FontRenderer fr) {
+        void draw(com.x4yi.x4ui.api.client.gui.IGraphics gfx, int absX, int absY) {
             int color = indent == 0 ? 0xFF00C853 : (indent == 1 ? 0xFF888892 : 0xFF555560);
             if (indent == 0) {
-                Gui.drawRect(absX + x, absY + y + 3, absX + x + 4, absY + y + 7, color);
+                gfx.drawRect(absX + x, absY + y + 3, 4, 4, color);
             } else {
-                Gui.drawRect(absX + x + 1, absY + y + 4, absX + x + 3, absY + y + 6, color);
+                gfx.drawRect(absX + x + 1, absY + y + 4, 2, 2, color);
             }
         }
     }
@@ -304,10 +316,8 @@ public class GuiMarkdown extends GuiComponent {
             }
         }
         @Override
-        void draw(int absX, int absY, FontRenderer fr) {
-            Minecraft.getMinecraft().getTextureManager().bindTexture(loc);
-            GlStateManager.color(1, 1, 1, 1);
-            Gui.drawModalRectWithCustomSizedTexture(absX + x, absY + y, 0, 0, w, h, w, h);
+        void draw(com.x4yi.x4ui.api.client.gui.IGraphics gfx, int absX, int absY) {
+            gfx.drawTexture(loc, absX + x, absY + y, w, h);
         }
     }
 }
