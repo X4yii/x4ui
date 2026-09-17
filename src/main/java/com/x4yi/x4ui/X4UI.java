@@ -14,7 +14,7 @@ import java.util.Map;
 public class X4UI {
     public static final String MODID = "x4ui";
     public static final String NAME = "X4UI";
-    public static final String VERSION = "r1.0b5";
+    public static final String VERSION = "r1.0b6";
     @NetworkCheckHandler
     public boolean checkRemoteVersions(Map<String, String> remoteVersions, Side side) {
         if (side == Side.SERVER) {
@@ -31,7 +31,11 @@ public class X4UI {
     @Mod.EventHandler
     public void preInit(FMLPreInitializationEvent event) {
         logger = event.getModLog();
-        logger.info("X4UI Pre-Initialization...");
+        logger.info("X4UI {} Pre-Initialization on {} (VirtualThreads={}, LWJGL3={})...",
+                VERSION,
+                com.x4yi.x4ui.common.platform.PlatformBridge.getRuntimeDescription(),
+                com.x4yi.x4ui.common.platform.PlatformBridge.isVirtualThreadsSupported(),
+                com.x4yi.x4ui.common.platform.PlatformBridge.isLwjgl3());
         proxy.preInit(event);
     }
     @Mod.EventHandler
