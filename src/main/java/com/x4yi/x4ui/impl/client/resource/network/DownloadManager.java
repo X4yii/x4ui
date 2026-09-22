@@ -1,100 +1,100 @@
 package com.x4yi.x4ui.impl.client.resource.network;
+
+import com.x4yi.x4ui.common.platform.PlatformBridge;
 import net.minecraft.client.Minecraft;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
 import java.io.File;
 import java.io.FileOutputStream;
-import java.net.URL;
-import java.nio.channels.Channels;
-import java.nio.channels.ReadableByteChannel;
-import java.security.MessageDigest;
+import java.io.IOException;
+import java.io.InputStream;
+import java.net.HttpURLConnection;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+
 @SideOnly(Side.CLIENT)
 public class DownloadManager {
     private static final DownloadManager INSTANCE = new DownloadManager();
-    private final ExecutorService executor = Executors.newFixedThreadPool(2);
+    private final ExecutorService executor = PlatformBridge.newIoExecutor("X4UI-Download", 2);
     private final ConcurrentHashMap<String, String> activeDownloads = new ConcurrentHashMap<>();
-    private File cacheRoot;
+    private final File cacheRoot;
+
     private DownloadManager() {
-        File mcDir = Minecraft.getMinecraft().mcDataDir;
+        Minecraft mc = Minecraft.getMinecraft();
+        File mcDir = (mc != null && mc.mcDataDir != null) ? mc.mcDataDir : new File(".");
         cacheRoot = new File(mcDir, "x4ui/cache/");
         if (!cacheRoot.exists()) {
             cacheRoot.mkdirs();
         }
     }
+
     public static DownloadManager getInstance() {
         return INSTANCE;
     }
+
     public String requestMedia(String modId, String urlStr) {
-        String safeModId = (modId == null || modId.trim().isEmpty()) ? "common" : modId.toLowerCase(java.util.Locale.ROOT);
-        String hash = getSHA256(urlStr);
-        File modCacheDir = new File(cacheRoot, safeModId);
-        if (!modCacheDir.exists()) {
-            modCacheDir.mkdirs();
+        if (urlStr == null || urlStr.trim().isEmpty()) {
+            return null;
         }
-        String ext = ".mp4";
-        int lastDot = urlStr.lastIndexOf('.');
-        if (lastDot > 0 && urlStr.length() - lastDot <= 5) {
-            ext = urlStr.substring(lastDot);
+        final String trimmedUrl = urlStr.trim();
+        final String safeModId = SecurityUtils.sanitizeModId(modId);
+        final String hash = SecurityUtils.sha256Hex(trimmedUrl);
+        final String ext = SecurityUtils.sanitizeExtension(trimmedUrl, ".mp4");
+
+        final File modCacheDir;
+        final File cachedFile;
+        try {
+            modCacheDir = SecurityUtils.resolveSafeChild(cacheRoot, safeModId);
+            if (!modCacheDir.exists()) {
+                modCacheDir.mkdirs();
+            }
+            cachedFile = SecurityUtils.resolveSafeChild(modCacheDir, hash + ext);
+        } catch (IOException | SecurityException e) {
+            org.apache.logging.log4j.LogManager.getLogger("x4ui").warn("[X4UI RemoteAssets] Blocked unsafe cache path: {}", e.getMessage());
+            return null;
         }
-        File cachedFile = new File(modCacheDir, hash + ext);
+
         if (cachedFile.exists() && cachedFile.length() > 0) {
             cachedFile.setLastModified(System.currentTimeMillis());
             return cachedFile.getAbsolutePath();
         }
-        if (activeDownloads.containsKey(hash)) {
+
+        if (activeDownloads.putIfAbsent(hash, trimmedUrl) != null) {
             return null;
         }
-        activeDownloads.put(hash, urlStr);
+
         executor.submit(() -> {
             File tmpFile = new File(modCacheDir, hash + ".download.tmp");
+            HttpURLConnection conn = null;
             try {
-                System.out.println("[X4UI RemoteAssets] Downloading: " + urlStr);
-                URL url = new URL(urlStr);
-                java.net.URLConnection conn = url.openConnection();
-                if (conn instanceof java.net.HttpURLConnection) {
-                    java.net.HttpURLConnection httpConn = (java.net.HttpURLConnection) conn;
-                    httpConn.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)");
-                    httpConn.setInstanceFollowRedirects(true);
+                org.apache.logging.log4j.LogManager.getLogger("x4ui").info("[X4UI RemoteAssets] Downloading: {}", trimmedUrl);
+                conn = SecurityUtils.openValidatedHttpConnection(trimmedUrl);
+                long contentLength = conn.getContentLengthLong();
+                if (contentLength > SecurityUtils.MAX_DOWNLOAD_BYTES) {
+                    throw new IOException("Remote file exceeds maximum allowed size (" + contentLength + " bytes)");
                 }
-                conn.setConnectTimeout(10000);
-                conn.setReadTimeout(20000);
-                if (conn instanceof java.net.HttpURLConnection) {
-                    int code = ((java.net.HttpURLConnection) conn).getResponseCode();
-                    if (code >= 300 && code < 400) {
-                        String newUrl = conn.getHeaderField("Location");
-                        if (newUrl != null) {
-                            conn = new URL(newUrl).openConnection();
-                            if (conn instanceof java.net.HttpURLConnection) {
-                                ((java.net.HttpURLConnection) conn).setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)");
-                            }
-                            conn.setConnectTimeout(10000);
-                            conn.setReadTimeout(20000);
-                        }
-                    }
-                    code = ((java.net.HttpURLConnection) conn).getResponseCode();
-                    if (code >= 400) {
-                        throw new Exception("HTTP Error: " + code);
-                    }
-                }
-                try (java.io.InputStream is = conn.getInputStream();
+                try (InputStream is = conn.getInputStream();
                      FileOutputStream fos = new FileOutputStream(tmpFile)) {
                     byte[] buffer = new byte[16384];
+                    long totalRead = 0;
                     int r;
                     while ((r = is.read(buffer)) != -1) {
+                        totalRead += r;
+                        if (totalRead > SecurityUtils.MAX_DOWNLOAD_BYTES) {
+                            throw new IOException("Download exceeded maximum allowed size (" + SecurityUtils.MAX_DOWNLOAD_BYTES + " bytes)");
+                        }
                         fos.write(buffer, 0, r);
                     }
                 }
                 if (tmpFile.exists() && tmpFile.length() > 0) {
                     if (cachedFile.exists()) cachedFile.delete();
-                    tmpFile.renameTo(cachedFile);
-                    System.out.println("[X4UI RemoteAssets] Cached successfully: " + cachedFile.getName());
+                    if (!tmpFile.renameTo(cachedFile)) {
+                        throw new IOException("Failed to move downloaded file to cache");
+                    }
+                    org.apache.logging.log4j.LogManager.getLogger("x4ui").info("[X4UI RemoteAssets] Cached successfully: {}", cachedFile.getName());
                 }
             } catch (Exception e) {
-                System.err.println("[X4UI RemoteAssets] Failed to download: " + urlStr);
-                e.printStackTrace();
+                org.apache.logging.log4j.LogManager.getLogger("x4ui").warn("[X4UI RemoteAssets] Failed to download: {} ({})", trimmedUrl, e.getMessage());
                 if (tmpFile.exists()) {
                     tmpFile.delete();
                 }
@@ -102,37 +102,31 @@ public class DownloadManager {
                     cachedFile.delete();
                 }
             } finally {
+                if (conn != null) {
+                    conn.disconnect();
+                }
                 activeDownloads.remove(hash);
             }
         });
         return null;
     }
+
     public void cleanCache(String modId, int daysLimit) {
-        File modCacheDir = new File(cacheRoot, modId);
-        if (!modCacheDir.exists()) return;
-        long limitMs = System.currentTimeMillis() - (daysLimit * 24L * 60L * 60L * 1000L);
-        File[] files = modCacheDir.listFiles();
-        if (files != null) {
-            for (File file : files) {
-                if (file.lastModified() < limitMs) {
-                    file.delete();
+        String safeModId = SecurityUtils.sanitizeModId(modId);
+        try {
+            File modCacheDir = SecurityUtils.resolveSafeChild(cacheRoot, safeModId);
+            if (!modCacheDir.exists() || !modCacheDir.isDirectory()) return;
+            long limitMs = System.currentTimeMillis() - (daysLimit * 24L * 60L * 60L * 1000L);
+            File[] files = modCacheDir.listFiles();
+            if (files != null) {
+                for (File file : files) {
+                    if (file.isFile() && file.lastModified() < limitMs) {
+                        file.delete();
+                    }
                 }
             }
-        }
-    }
-    private String getSHA256(String input) {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] hash = digest.digest(input.getBytes("UTF-8"));
-            StringBuilder hexString = new StringBuilder();
-            for (byte b : hash) {
-                String hex = Integer.toHexString(0xff & b);
-                if (hex.length() == 1) hexString.append('0');
-                hexString.append(hex);
-            }
-            return hexString.toString();
-        } catch (Exception e) {
-            return String.valueOf(input.hashCode());
+        } catch (IOException | SecurityException e) {
+            org.apache.logging.log4j.LogManager.getLogger("x4ui").warn("[X4UI RemoteAssets] Blocked unsafe cache clean: {}", e.getMessage());
         }
     }
 }
