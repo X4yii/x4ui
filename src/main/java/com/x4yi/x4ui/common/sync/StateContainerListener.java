@@ -34,6 +34,8 @@ public class StateContainerListener implements IContainerListener {
         private final java.util.function.IntConsumer consumer;
         private int currentLow;
         private int currentHigh;
+        private boolean hasLow = false;
+        private boolean hasHigh = false;
         Property32Binding(int lowId, int highId, java.util.function.IntConsumer consumer) {
             this.lowId = lowId;
             this.highId = highId;
@@ -41,11 +43,20 @@ public class StateContainerListener implements IContainerListener {
         }
         void updateLow(int val) {
             this.currentLow = val & 0xFFFF;
-            consumer.accept((currentHigh << 16) | currentLow);
+            this.hasLow = true;
+            tryEmit();
         }
         void updateHigh(int val) {
             this.currentHigh = val & 0xFFFF;
-            consumer.accept((currentHigh << 16) | currentLow);
+            this.hasHigh = true;
+            tryEmit();
+        }
+        private void tryEmit() {
+            if (hasLow && hasHigh) {
+                hasLow = false;
+                hasHigh = false;
+                consumer.accept((currentHigh << 16) | currentLow);
+            }
         }
     }
     @Override
