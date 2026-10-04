@@ -38,6 +38,11 @@ public class GuiLabel extends GuiComponent {
         updateDimensions();
         return this;
     }
+    @Override
+    protected void onAttached(GuiComponent parent) {
+        super.onAttached(parent);
+        updateDimensions();
+    }
     protected void updateDimensions() {
         if (text != null) {
             setWidth(getFont().getWidth(text));

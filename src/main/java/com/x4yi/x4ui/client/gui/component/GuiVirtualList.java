@@ -96,8 +96,13 @@ public class GuiVirtualList<T> extends GuiScrollPanel {
                     itemBinder.accept(comp, item);
                 } else if (componentBuilder != null) {
                     comp = componentBuilder.apply(item);
-                    comp.setY(i * itemHeight);
-                    this.contentPanel.addChild(comp);
+                    if (comp != null) {
+                        comp.setY(i * itemHeight);
+                        this.contentPanel.addChild(comp);
+                        if (itemBinder != null) {
+                            itemBinder.accept(comp, item);
+                        }
+                    }
                 }
                 if (comp != null) {
                     activeComponents.put(i, comp);
@@ -110,13 +115,7 @@ public class GuiVirtualList<T> extends GuiScrollPanel {
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        for (GuiComponent comp : activeComponents.values()) {
-            comp.destroy();
-        }
         activeComponents.clear();
-        for (GuiComponent comp : recyclePool) {
-            comp.destroy();
-        }
         recyclePool.clear();
     }
 }

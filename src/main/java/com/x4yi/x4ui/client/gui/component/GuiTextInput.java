@@ -1,9 +1,9 @@
 package com.x4yi.x4ui.client.gui.component;
+import com.x4yi.x4ui.client.gui.input.KeyCodes;
 import net.minecraft.client.gui.Gui;
 import net.minecraft.client.gui.GuiScreen;
 import net.minecraft.util.ChatAllowedCharacters;
 import net.minecraft.util.math.MathHelper;
-import org.lwjgl.input.Keyboard;
 public class GuiTextInput extends GuiComponent {
     protected String text = "";
     protected String placeholder = "";
@@ -11,12 +11,30 @@ public class GuiTextInput extends GuiComponent {
     protected int cursorPosition = 0;
     protected int selectionEnd = 0;
     protected int lineScrollOffset = 0;
-    protected int cursorCounter = 0;
-    protected int submitKeyCode = Keyboard.KEY_RETURN;
+    protected float cursorBlinkTimer = 0.0f;
+    protected boolean draggingSelection = false;
+    protected com.x4yi.x4ui.common.State<String> boundState = null;
+    protected int submitKeyCode = KeyCodes.ENTER;
     protected Runnable onSubmit = null;
     protected java.util.function.Consumer<String> onTextChanged = null;
     public GuiTextInput(int x, int y, int width, int height) {
         super(x, y, width, height);
+    }
+    public GuiTextInput(int x, int y, int width, int height, com.x4yi.x4ui.common.State<String> state) {
+        super(x, y, width, height);
+        bindState(state);
+    }
+    public GuiTextInput bindState(com.x4yi.x4ui.common.State<String> state) {
+        this.boundState = state;
+        if (state != null) {
+            bindState(state, val -> {
+                String normalized = val != null ? val : "";
+                if (!normalized.equals(this.text)) {
+                    setTextInternal(normalized, false);
+                }
+            });
+        }
+        return this;
     }
     public GuiTextInput setSubmitKey(int keyCode) {
         this.submitKeyCode = keyCode;
@@ -31,11 +49,20 @@ public class GuiTextInput extends GuiComponent {
         return this;
     }
     public void setText(String text) {
+        setTextInternal(text, true);
+    }
+    private void setTextInternal(String text, boolean propagateToState) {
         this.text = text != null ? text : "";
         if (this.text.length() > maxLength) {
             this.text = this.text.substring(0, maxLength);
         }
         setCursorPosition(this.text.length());
+        notifyTextChanged(propagateToState);
+    }
+    private void notifyTextChanged(boolean propagateToState) {
+        if (propagateToState && this.boundState != null) {
+            this.boundState.set(this.text);
+        }
         if (this.onTextChanged != null) {
             this.onTextChanged.accept(this.text);
         }
@@ -64,12 +91,18 @@ public class GuiTextInput extends GuiComponent {
     }
     @Override
     protected void onFocusGained() {
-        cursorCounter = 0;
+        cursorBlinkTimer = 0.0f;
+    }
+    @Override
+    protected void onFocusLost() {
+        draggingSelection = false;
     }
     @Override
     public void update(float deltaTime) {
         super.update(deltaTime);
-        if (isFocused()) cursorCounter++;
+        if (isFocused()) {
+            cursorBlinkTimer = (cursorBlinkTimer + Math.max(0.0f, deltaTime)) % 1.0f;
+        }
     }
     @Override
     protected void renderSelf(com.x4yi.x4ui.api.client.gui.IGraphics gfx, int mouseX, int mouseY, float partialTicks) {
@@ -91,7 +124,7 @@ public class GuiTextInput extends GuiComponent {
         gfx.drawString(visibleText, textX, textY, theme.getTextColor(), false);
         int cursorRel = cursorPosition - lineScrollOffset;
         int selEndRel = selectionEnd - lineScrollOffset;
-        boolean cursorVisible = isFocused() && (cursorCounter / 6) % 2 == 0 && cursorRel >= 0 && cursorRel <= visibleText.length();
+        boolean cursorVisible = isFocused() && cursorBlinkTimer < 0.5f && cursorRel >= 0 && cursorRel <= visibleText.length();
         if (cursorVisible) {
             int cursorX = textX + gfx.getStringWidth(visibleText.substring(0, cursorRel));
             gfx.drawRect(cursorX, textY - 1, 1, fontHeight + 2, 0xFFFFFFFF);
@@ -109,24 +142,52 @@ public class GuiTextInput extends GuiComponent {
             }
         }
     }
+    private int getCharIndexAtMouseX(int mouseX) {
+        int textX = getAbsoluteX() + 4;
+        int clickedRelX = Math.max(0, mouseX - textX);
+        String visibleText = getFont().trimStringToWidth(text.substring(lineScrollOffset), Math.max(1, width - 8));
+        int clickedCharOffset = getFont().trimStringToWidth(visibleText, clickedRelX).length();
+        return MathHelper.clamp(lineScrollOffset + clickedCharOffset, 0, text.length());
+    }
     @Override
     public boolean onMouseClick(int mouseX, int mouseY, int mouseButton) {
         if (!super.onMouseClick(mouseX, mouseY, mouseButton)) {
             boolean wasFocused = isFocused();
-            boolean clickedOnUs = isMouseOver(mouseX, mouseY) && enabled;
+            boolean clickedOnUs = isMouseOver(mouseX, mouseY) && enabled && mouseButton == 0;
             if (clickedOnUs) {
                 this.requestFocus();
-                int textX = getAbsoluteX() + 4;
-                int clickedRelX = mouseX - textX;
-                String visibleText = getFont().trimStringToWidth(text.substring(lineScrollOffset), Math.max(1, width - 8));
-                int clickedCharOffset = getFont().trimStringToWidth(visibleText, clickedRelX).length();
-                setCursorPosition(lineScrollOffset + clickedCharOffset);
+                int idx = getCharIndexAtMouseX(mouseX);
+                if (GuiScreen.isShiftKeyDown()) {
+                    this.cursorPosition = idx;
+                    clampScrollOffset();
+                } else {
+                    setCursorPosition(idx);
+                }
+                this.draggingSelection = true;
+                this.cursorBlinkTimer = 0.0f;
                 return true;
             } else if (wasFocused) {
                 this.clearFocus();
             }
         }
         return false;
+    }
+    @Override
+    public boolean onMouseDrag(int mouseX, int mouseY, int clickedMouseButton, long timeSinceLastClick) {
+        if (draggingSelection && clickedMouseButton == 0 && isFocused() && enabled) {
+            this.cursorPosition = getCharIndexAtMouseX(mouseX);
+            clampScrollOffset();
+            return true;
+        }
+        return super.onMouseDrag(mouseX, mouseY, clickedMouseButton, timeSinceLastClick);
+    }
+    @Override
+    public boolean onMouseRelease(int mouseX, int mouseY, int state) {
+        if (draggingSelection && state == 0) {
+            draggingSelection = false;
+            return true;
+        }
+        return super.onMouseRelease(mouseX, mouseY, state);
     }
     @Override
     public boolean onKeyPress(char typedChar, int keyCode) {
@@ -154,44 +215,50 @@ public class GuiTextInput extends GuiComponent {
             }
         }
         switch (keyCode) {
-            case Keyboard.KEY_BACK:
+            case KeyCodes.BACKSPACE:
                 if (GuiScreen.isCtrlKeyDown()) {
                     deleteWords(-1);
                 } else {
                     deleteFromCursor(-1);
                 }
                 return true;
-            case Keyboard.KEY_DELETE:
+            case KeyCodes.DELETE:
                 if (GuiScreen.isCtrlKeyDown()) {
                     deleteWords(1);
                 } else {
                     deleteFromCursor(1);
                 }
                 return true;
-            case Keyboard.KEY_LEFT:
-                if (GuiScreen.isShiftKeyDown()) {
-                    if (cursorPosition > 0) cursorPosition--;
-                } else {
-                    if (cursorPosition > 0) cursorPosition--;
+            case KeyCodes.LEFT:
+                if (GuiScreen.isCtrlKeyDown()) {
+                    cursorPosition = getNthWordFromCursor(-1);
+                } else if (cursorPosition > 0) {
+                    cursorPosition--;
+                }
+                if (!GuiScreen.isShiftKeyDown()) {
                     selectionEnd = cursorPosition;
                 }
+                cursorBlinkTimer = 0.0f;
                 clampScrollOffset();
                 return true;
-            case Keyboard.KEY_RIGHT:
-                if (GuiScreen.isShiftKeyDown()) {
-                    if (cursorPosition < text.length()) cursorPosition++;
-                } else {
-                    if (cursorPosition < text.length()) cursorPosition++;
+            case KeyCodes.RIGHT:
+                if (GuiScreen.isCtrlKeyDown()) {
+                    cursorPosition = getNthWordFromCursor(1);
+                } else if (cursorPosition < text.length()) {
+                    cursorPosition++;
+                }
+                if (!GuiScreen.isShiftKeyDown()) {
                     selectionEnd = cursorPosition;
                 }
+                cursorBlinkTimer = 0.0f;
                 clampScrollOffset();
                 return true;
-            case Keyboard.KEY_HOME:
+            case KeyCodes.HOME:
                 cursorPosition = 0;
                 if (!GuiScreen.isShiftKeyDown()) selectionEnd = 0;
                 clampScrollOffset();
                 return true;
-            case Keyboard.KEY_END:
+            case KeyCodes.END:
                 cursorPosition = text.length();
                 if (!GuiScreen.isShiftKeyDown()) selectionEnd = cursorPosition;
                 clampScrollOffset();
@@ -222,7 +289,7 @@ public class GuiTextInput extends GuiComponent {
             cursorPosition = min + sanitized.length();
             selectionEnd = cursorPosition;
             clampScrollOffset();
-            if (onTextChanged != null) onTextChanged.accept(this.text);
+            notifyTextChanged(true);
         }
     }
     private void deleteFromCursor(int dir) {
@@ -235,11 +302,11 @@ public class GuiTextInput extends GuiComponent {
             cursorPosition--;
             selectionEnd = cursorPosition;
             clampScrollOffset();
-            if (onTextChanged != null) onTextChanged.accept(this.text);
+            notifyTextChanged(true);
         } else if (dir > 0 && cursorPosition < text.length()) {
             text = text.substring(0, cursorPosition) + text.substring(cursorPosition + 1);
             clampScrollOffset();
-            if (onTextChanged != null) onTextChanged.accept(this.text);
+            notifyTextChanged(true);
         }
     }
     private void deleteWords(int dir) {
@@ -255,7 +322,7 @@ public class GuiTextInput extends GuiComponent {
             cursorPosition = min;
             selectionEnd = cursorPosition;
             clampScrollOffset();
-            if (onTextChanged != null) onTextChanged.accept(this.text);
+            notifyTextChanged(true);
         }
     }
     private int getNthWordFromCursor(int dir) {

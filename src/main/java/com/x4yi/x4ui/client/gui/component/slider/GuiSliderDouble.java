@@ -6,14 +6,14 @@ public class GuiSliderDouble extends GuiSlider<Double> {
     }
     @Override
     protected double getPercentage(Double value) {
-        if (max <= min) return 0.0;
-        return (value - min) / (max - min);
+        if (value == null || max <= min) return 0.0;
+        return Math.max(0.0, Math.min(1.0, (value - min) / (max - min)));
     }
     @Override
     protected Double getValueFromPercentage(double percentage) {
         double val = min + percentage * (max - min);
         if (step > 0) {
-            val = Math.round(val / step) * step;
+            val = min + Math.round((val - min) / step) * step;
         }
         return Math.max(min, Math.min(max, val));
     }

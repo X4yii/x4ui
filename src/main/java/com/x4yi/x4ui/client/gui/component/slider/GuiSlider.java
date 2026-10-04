@@ -36,7 +36,7 @@ public abstract class GuiSlider<T extends Number> extends GuiComponent {
         ITheme theme = getTheme();
         boolean hovered = isMouseOver(mouseX, mouseY);
         int hColor = (hovered || dragging) ? theme.getSliderHandleHoverColor() : theme.getSliderHandleColor();
-        double perc = getPercentage(state.get());
+        double perc = Math.max(0.0, Math.min(1.0, getPercentage(state.get())));
         if (horizontal) {
             int trackY = absY + height / 2 - 2;
             gfx.drawRect(absX, trackY, width, 4, theme.getSliderTrackColor());

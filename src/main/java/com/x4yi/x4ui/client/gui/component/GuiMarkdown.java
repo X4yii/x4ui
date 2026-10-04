@@ -34,6 +34,14 @@ public class GuiMarkdown extends GuiComponent {
         this.rawText = text;
         parseAndLayout();
     }
+    @Override
+    public void setWidth(int width) {
+        int prev = this.width;
+        super.setWidth(width);
+        if (prev != width) {
+            parseAndLayout();
+        }
+    }
     public String getRawText() {
         return this.rawText;
     }
@@ -72,12 +80,13 @@ public class GuiMarkdown extends GuiComponent {
                 String alt = m.group(1);
                 String path = m.group(2);
                 String[] parts = path.split(":", 2);
-                if (parts.length == 2) {
-                    ImageNode inode = new ImageNode(0, currentY, new ResourceLocation(parts[0], parts[1]), alt);
-                    nodes.add(inode);
-                    currentY += inode.h + 4;
-                    continue;
-                }
+                ResourceLocation loc = parts.length == 2
+                        ? new ResourceLocation(parts[0], parts[1])
+                        : new ResourceLocation("minecraft", path);
+                ImageNode inode = new ImageNode(0, currentY, loc, alt);
+                nodes.add(inode);
+                currentY += inode.h + 4;
+                continue;
             }
             if (trimmed.equals("---") || trimmed.equals("***") || trimmed.equals("___")) {
                 nodes.add(new SeparatorNode(0, currentY, width));
@@ -309,10 +318,13 @@ public class GuiMarkdown extends GuiComponent {
         ImageNode(int x, int y, ResourceLocation loc, String alt) {
             this.x = x; this.y = y; this.loc = loc; this.alt = alt;
             this.w = 64; this.h = 64;
-            if (alt.matches("\\d+x\\d+")) {
-                String[] dims = alt.split("x");
-                this.w = Integer.parseInt(dims[0]);
-                this.h = Integer.parseInt(dims[1]);
+            if (alt.matches("\\d{1,4}x\\d{1,4}")) {
+                try {
+                    String[] dims = alt.split("x");
+                    this.w = Math.max(1, Math.min(2048, Integer.parseInt(dims[0])));
+                    this.h = Math.max(1, Math.min(2048, Integer.parseInt(dims[1])));
+                } catch (NumberFormatException ignored) {
+                }
             }
         }
         @Override

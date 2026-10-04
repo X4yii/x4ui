@@ -1,32 +1,60 @@
 package com.x4yi.x4ui.client.gui.component;
+
+import com.x4yi.x4ui.api.client.gui.IGraphics;
 import com.x4yi.x4ui.client.gui.base.GuiBaseContainer;
 import net.minecraft.inventory.Slot;
+
 public class GuiSlot extends GuiComponent {
     private final Slot slot;
     private final GuiBaseContainer containerScreen;
+
     public GuiSlot(Slot slot, GuiBaseContainer containerScreen) {
         super(0, 0, 18, 18);
         this.slot = slot;
         this.containerScreen = containerScreen;
     }
+
     public Slot getSlot() {
         return slot;
     }
+
+    @Override
+    protected void onEffectiveVisibilityChanged(boolean effectivelyVisible) {
+        super.onEffectiveVisibilityChanged(effectivelyVisible);
+        if (!effectivelyVisible && slot != null) {
+            slot.xPos = -9999;
+            slot.yPos = -9999;
+        }
+    }
+
+    @Override
+    protected void onDetached() {
+        super.onDetached();
+        if (slot != null) {
+            slot.xPos = -9999;
+            slot.yPos = -9999;
+        }
+    }
+
     @Override
     public void update(float deltaTime) {
         super.update(deltaTime);
-        if (slot != null && containerScreen != null) {
-            if (isClippedByAncestors()) {
-                slot.xPos = -9999;
-                slot.yPos = -9999;
-            } else {
-                int absX = getAbsoluteX();
-                int absY = getAbsoluteY();
-                slot.xPos = absX - containerScreen.getGuiLeft();
-                slot.yPos = absY - containerScreen.getGuiTop();
-            }
+        syncSlotPosition();
+    }
+
+    private void syncSlotPosition() {
+        if (slot == null || containerScreen == null) return;
+        if (!isEffectivelyVisible() || isClippedByAncestors()) {
+            slot.xPos = -9999;
+            slot.yPos = -9999;
+        } else {
+            int absX = getAbsoluteX();
+            int absY = getAbsoluteY();
+            slot.xPos = absX - containerScreen.getGuiLeft() + 1;
+            slot.yPos = absY - containerScreen.getGuiTop() + 1;
         }
     }
+
     private boolean isClippedByAncestors() {
         int absX = getAbsoluteX();
         int absY = getAbsoluteY();
@@ -37,7 +65,7 @@ public class GuiSlot extends GuiComponent {
                 int pY = current.getAbsoluteY();
                 int pW = current.getWidth();
                 int pH = current.getHeight();
-                if (absX + width <= pX || absX >= pX + pW || absY + height <= pY || absY >= pY + pH) {
+                if (absX < pX || absX + width > pX + pW || absY < pY || absY + height > pY + pH) {
                     return true;
                 }
             }
@@ -45,8 +73,9 @@ public class GuiSlot extends GuiComponent {
         }
         return false;
     }
+
     @Override
-    protected void renderSelf(com.x4yi.x4ui.api.client.gui.IGraphics gfx, int mouseX, int mouseY, float partialTicks) {
+    protected void renderSelf(IGraphics gfx, int mouseX, int mouseY, float partialTicks) {
         int absX = getAbsoluteX();
         int absY = getAbsoluteY();
         gfx.drawRect(absX, absY, width, height, 0x55000000);
