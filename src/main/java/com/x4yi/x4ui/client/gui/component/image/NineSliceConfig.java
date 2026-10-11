@@ -59,10 +59,6 @@ public final class NineSliceConfig {
     public boolean isFillCenter() {
         return fillCenter;
     }
-    @Deprecated
-    public Insets getInsets() {
-        return textureInsets;
-    }
     public int getTextureWidth() {
         return textureWidth;
     }

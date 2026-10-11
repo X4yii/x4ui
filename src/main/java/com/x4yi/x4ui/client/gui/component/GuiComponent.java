@@ -47,7 +47,7 @@ public abstract class GuiComponent {
     public com.x4yi.x4ui.client.gui.utils.ITheme getTheme() {
         if (this.theme != null) return this.theme;
         if (this.parent != null) return this.parent.getTheme();
-        return com.x4yi.x4ui.client.gui.utils.DefaultTheme.INSTANCE;
+        return com.x4yi.x4ui.client.gui.utils.ThemeRegistry.getCurrentTheme();
     }
     public GuiComponent withFont(com.x4yi.x4ui.api.client.font.IFont font) {
         this.font = font;
@@ -183,14 +183,17 @@ public abstract class GuiComponent {
     public void update(float deltaTime) {
         if (!visible) return;
         if (parent != null) {
+            com.x4yi.x4ui.client.gui.utils.Insets parentPad = parent.getPadding();
             if (percentWidth >= 0.0f) {
-                int pw = Math.max(0, (int) (parent.getWidth() * percentWidth));
+                int availW = Math.max(0, parent.getWidth() - parentPad.left - parentPad.right - margin.left - margin.right);
+                int pw = Math.max(0, (int) (availW * percentWidth));
                 if (this.width != pw) {
                     setWidth(pw);
                 }
             }
             if (percentHeight >= 0.0f) {
-                int ph = Math.max(0, (int) (parent.getHeight() * percentHeight));
+                int availH = Math.max(0, parent.getHeight() - parentPad.top - parentPad.bottom - margin.top - margin.bottom);
+                int ph = Math.max(0, (int) (availH * percentHeight));
                 if (this.height != ph) {
                     setHeight(ph);
                 }
@@ -208,10 +211,6 @@ public abstract class GuiComponent {
                 }
             }
         }
-        if (needsLayout && layoutManager != null) {
-            layoutManager.layout(this, children);
-            needsLayout = false;
-        }
         if (this.parent == null && this.scrollFocusedComponent != null) {
             this.scrollFocusTimer -= deltaTime;
             if (this.scrollFocusTimer <= 0.0f) {
@@ -222,10 +221,10 @@ public abstract class GuiComponent {
         for (GuiComponent child : children) {
             child.update(deltaTime);
         }
-    }
-    @Deprecated
-    public void tick(float deltaTime) {
-        update(deltaTime);
+        if (needsLayout && layoutManager != null) {
+            layoutManager.layout(this, children);
+            needsLayout = false;
+        }
     }
     public void destroy() {
         onDestroy();
@@ -278,10 +277,6 @@ public abstract class GuiComponent {
                 gfx.setFont(prevFont);
             }
         }
-    }
-    @Deprecated
-    public void render(int mouseX, int mouseY, float partialTicks) {
-        render(GLGraphics.INSTANCE, mouseX, mouseY, partialTicks);
     }
     protected abstract void renderSelf(IGraphics gfx, int mouseX, int mouseY, float partialTicks);
     protected void ensureRenderChildren() {
@@ -397,10 +392,14 @@ public abstract class GuiComponent {
             GuiComponent hovered = renderChildren.get(i).getHoveredComponent(mouseX, mouseY);
             if (hovered != null) return hovered;
         }
-        if (tooltipText != null || tooltipComponent != null) {
-            return this;
+        return this;
+    }
+    public GuiComponent getTooltipSource(int mouseX, int mouseY) {
+        GuiComponent current = getHoveredComponent(mouseX, mouseY);
+        while (current != null && current.getTooltipText() == null && current.getTooltipComponent() == null) {
+            current = current.getParent();
         }
-        return null;
+        return current;
     }
     public boolean contains(int mouseX, int mouseY) {
         return isMouseOver(mouseX, mouseY);
@@ -439,7 +438,28 @@ public abstract class GuiComponent {
     public void setPadding(com.x4yi.x4ui.client.gui.utils.Insets padding) { this.padding = padding; requestLayout(); }
     public void setMargin(com.x4yi.x4ui.client.gui.utils.Insets margin) { this.margin = margin; if (parent != null) parent.requestLayout(); }
     public boolean isVisible() { return visible; }
-    public void setVisible(boolean visible) { if (this.visible != visible) { this.visible = visible; if (parent != null) parent.requestLayout(); } }
+    public boolean isEffectivelyVisible() {
+        GuiComponent current = this;
+        while (current != null) {
+            if (!current.visible) return false;
+            current = current.parent;
+        }
+        return true;
+    }
+    protected void onEffectiveVisibilityChanged(boolean effectivelyVisible) {
+        for (GuiComponent child : children) {
+            if (child.visible) {
+                child.onEffectiveVisibilityChanged(effectivelyVisible);
+            }
+        }
+    }
+    public void setVisible(boolean visible) {
+        if (this.visible != visible) {
+            this.visible = visible;
+            if (parent != null) parent.requestLayout();
+            onEffectiveVisibilityChanged(isEffectivelyVisible());
+        }
+    }
     public boolean isEnabled() { return enabled; }
     public void setEnabled(boolean enabled) { this.enabled = enabled; }
     public GuiComponent withPosition(int x, int y) { setX(x); setY(y); return this; }
