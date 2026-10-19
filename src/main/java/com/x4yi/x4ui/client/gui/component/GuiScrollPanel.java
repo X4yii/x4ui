@@ -37,7 +37,7 @@ public class GuiScrollPanel extends GuiPanel {
             }
             @Override
             public boolean onMouseClick(int mouseX, int mouseY, int mouseButton) {
-                if (!visible || !enabled) return false;
+                if (!visible || !enabled || !GuiScrollPanel.this.isMouseOver(mouseX, mouseY)) return false;
                 int viewHeight = GuiScrollPanel.this.height;
                 int scrollViewY = (int) scrollY;
                 for (int i = renderChildren.size() - 1; i >= 0; i--) {
@@ -60,6 +60,23 @@ public class GuiScrollPanel extends GuiPanel {
     }
     public GuiPanel getContentPanel() {
         return contentPanel;
+    }
+
+    public static GuiScrollPanel vertical(int height, int gap) {
+        GuiScrollPanel sp = new GuiScrollPanel(0, 0, 0, height);
+        sp.withPercentWidth(1.0f);
+        sp.setContentGap(gap);
+        return sp;
+    }
+
+    public GuiScrollPanel withContentGap(int gap) {
+        setContentGap(gap);
+        return this;
+    }
+
+    public GuiScrollPanel withContentPadding(int padding) {
+        setContentPadding(new com.x4yi.x4ui.client.gui.utils.Insets(padding));
+        return this;
     }
     public float getScrollY() { return scrollY; }
     public void setScrollY(float y) { this.scrollY = y; }
@@ -89,9 +106,30 @@ public class GuiScrollPanel extends GuiPanel {
         contentPanel.clearChildren();
     }
     @Override
+    public java.util.List<GuiComponent> getChildren() {
+        return contentPanel.getChildren();
+    }
+    public void setContentGap(int gap) {
+        contentPanel.setGap(gap);
+    }
+    public void setContentPadding(com.x4yi.x4ui.client.gui.utils.Insets padding) {
+        contentPanel.setPadding(padding);
+    }
+    public void setContentFlexDirection(FlexDirection direction) {
+        contentPanel.setFlexDirection(direction);
+    }
+    public void setContentFlexWrap(boolean flexWrap) {
+        contentPanel.setFlexWrap(flexWrap);
+    }
+    @Override
     public void update(float deltaTime) {
         super.update(deltaTime);
         maxScrollY = Math.max(0, contentPanel.getHeight() - this.height);
+        int desiredRightMargin = maxScrollY > 0 ? (scrollbarWidth + 6) : 0;
+        if (contentPanel.getMargin().right != desiredRightMargin) {
+            com.x4yi.x4ui.client.gui.utils.Insets m = contentPanel.getMargin();
+            contentPanel.setMargin(new com.x4yi.x4ui.client.gui.utils.Insets(m.top, desiredRightMargin, m.bottom, m.left));
+        }
         if (targetScrollY > maxScrollY) targetScrollY = maxScrollY;
         if (targetScrollY < 0) targetScrollY = 0;
         float dt = (deltaTime > 0.0f) ? deltaTime : (com.x4yi.x4ui.client.gui.base.GuiBaseScreen.deltaTime > 0.0f ? com.x4yi.x4ui.client.gui.base.GuiBaseScreen.deltaTime : 0.016f);
@@ -128,7 +166,7 @@ public class GuiScrollPanel extends GuiPanel {
     }
     @Override
     public boolean onMouseClick(int mouseX, int mouseY, int mouseButton) {
-        if (!visible || !enabled) return false;
+        if (!visible || !enabled || !isMouseOver(mouseX, mouseY)) return false;
         if (mouseButton == 0 && maxScrollY > 0) {
             int absX = getAbsoluteX();
             int absY = getAbsoluteY();

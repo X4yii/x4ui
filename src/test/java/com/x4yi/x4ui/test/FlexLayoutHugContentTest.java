@@ -32,7 +32,6 @@ public class FlexLayoutHugContentTest {
 
         parent.update(0.016f);
 
-        // Con hugContent == false, las dimensiones del contenedor padre se preservan
         Assert.assertEquals(300, parent.getWidth());
         Assert.assertEquals(200, parent.getHeight());
     }
@@ -51,7 +50,6 @@ public class FlexLayoutHugContentTest {
 
         parent.update(0.016f);
 
-        // Altura esperada con hugContent: child1(40) + gap(10) + child2(40) = 90
         Assert.assertEquals(90, parent.getHeight());
         Assert.assertEquals(300, parent.getWidth());
     }
@@ -62,15 +60,10 @@ public class FlexLayoutHugContentTest {
         TestComponent child = new TestComponent();
         parent.addChild(child);
 
-        // Limpiar la bandera needsLayout tras el primer pase
         parent.update(0.016f);
 
-        // Mutar dimensiones usando setter
         child.setWidth(80);
 
-        // Verificar que el padre ha sido marcado para recalcular layout
-        // En GuiComponent: setWidth -> if (parent != null) parent.requestLayout()
-        // por lo que parent.update() procesará el nuevo layout
         DummyBlock dummy = new DummyBlock(10, 10);
         parent.addChild(dummy);
         Assert.assertNotNull(parent);
