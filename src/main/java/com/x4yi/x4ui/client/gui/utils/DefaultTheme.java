@@ -5,37 +5,37 @@ import net.minecraft.client.gui.FontRenderer;
 import java.util.List;
 public class DefaultTheme implements ITheme {
     public static final DefaultTheme INSTANCE = new DefaultTheme();
-    @Override public int getTooltipBackgroundColor() { return 0xF0101010; }
-    @Override public int getTooltipBorderColor() { return 0x505000FF; }
-    @Override public int getTooltipTextColor() { return 0xFFFFFFFF; }
-    @Override public int getTooltipPadding() { return 4; }
+    @Override public int getTooltipBackgroundColor() { return 0xFF101216; }
+    @Override public int getTooltipBorderColor() { return 0xFF2E3442; }
+    @Override public int getTooltipTextColor() { return 0xFFF3F4F6; }
+    @Override public int getTooltipPadding() { return 5; }
     @Override public int getTooltipGap() { return 2; }
     @Override public int getPrimaryColor() { return 0xFF3B82F6; }
-    @Override public int getSecondaryColor() { return 0xFF1E40AF; }
-    @Override public int getBackgroundColor() { return 0xFF1F2937; }
-    @Override public int getTextColor() { return 0xFFF3F4F6; }
-    @Override public int getDisabledTextColor() { return 0xFF9CA3AF; }
-    @Override public int getButtonBackgroundColor() { return 0x80000000; }
-    @Override public int getButtonHoverColor() { return 0xCC000000; }
-    @Override public int getButtonDisabledColor() { return 0x40000000; }
+    @Override public int getSecondaryColor() { return 0xFF2563EB; }
+    @Override public int getBackgroundColor() { return 0xFF14161B; }
+    @Override public int getTextColor() { return 0xFFE5E7EB; }
+    @Override public int getDisabledTextColor() { return 0xFF6B7280; }
+    @Override public int getButtonBackgroundColor() { return 0xFF232732; }
+    @Override public int getButtonHoverColor() { return 0xFF2E3443; }
+    @Override public int getButtonDisabledColor() { return 0xFF1A1D24; }
     @Override public int getButtonPrimaryColor() { return getPrimaryColor(); }
     @Override public int getButtonSecondaryColor() { return getSecondaryColor(); }
     @Override public int getButtonSuccessColor() { return 0xFF10B981; }
     @Override public int getButtonDangerColor() { return 0xFFEF4444; }
-    @Override public int getCardBackgroundColor() { return 0xCC181A24; }
-    @Override public int getCardBorderColor() { return 0xFF2A2D3D; }
-    @Override public int getScrollbarTrackColor() { return 0x20FFFFFF; }
-    @Override public int getScrollbarThumbColor() { return 0x60FFFFFF; }
-    @Override public int getScrollbarThumbHoverColor() { return 0xA0FFFFFF; }
-    @Override public int getSliderTrackColor() { return 0xFF2C2C36; }
-    @Override public int getSliderFillColor() { return 0xFF29B6F6; }
-    @Override public int getSliderHandleColor() { return 0xFFFFFFFF; }
-    @Override public int getSliderHandleHoverColor() { return 0xFFE0E0E6; }
-    @Override public int getTextInputBackgroundColor() { return 0xFF000000; }
-    @Override public int getTextInputBorderColor() { return 0xFFA0A0A0; }
-    @Override public int getTextInputFocusedBorderColor() { return 0xFFFFFFFF; }
-    @Override public int getToggleOnColor() { return 0xFF00C853; }
-    @Override public int getToggleOffColor() { return 0xFF424248; }
+    @Override public int getCardBackgroundColor() { return 0xFF1B1E26; }
+    @Override public int getCardBorderColor() { return 0xFF2A2F3D; }
+    @Override public int getScrollbarTrackColor() { return 0xFF161920; }
+    @Override public int getScrollbarThumbColor() { return 0xFF383F50; }
+    @Override public int getScrollbarThumbHoverColor() { return 0xFF4F586E; }
+    @Override public int getSliderTrackColor() { return 0xFF262B36; }
+    @Override public int getSliderFillColor() { return 0xFF3B82F6; }
+    @Override public int getSliderHandleColor() { return 0xFFF3F4F6; }
+    @Override public int getSliderHandleHoverColor() { return 0xFFFFFFFF; }
+    @Override public int getTextInputBackgroundColor() { return 0xFF101216; }
+    @Override public int getTextInputBorderColor() { return 0xFF2E3442; }
+    @Override public int getTextInputFocusedBorderColor() { return 0xFF3B82F6; }
+    @Override public int getToggleOnColor() { return 0xFF10B981; }
+    @Override public int getToggleOffColor() { return 0xFF374151; }
     @Override
     public void drawTooltip(com.x4yi.x4ui.api.client.gui.IGraphics gfx, List<String> textLines, int mouseX, int mouseY, int screenWidth, int screenHeight) {
         if (textLines == null || textLines.isEmpty()) return;

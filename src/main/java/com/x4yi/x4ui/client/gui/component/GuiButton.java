@@ -27,10 +27,6 @@ public class GuiButton extends GuiComponent {
         }
     }
     @Override
-    public void tick(float deltaTime) {
-        update(deltaTime);
-    }
-    @Override
     protected void renderSelf(com.x4yi.x4ui.api.client.gui.IGraphics gfx, int mouseX, int mouseY, float partialTicks) {
         boolean hovered = isMouseOver(mouseX, mouseY) && enabled;
         float dt = lastDeltaTime > 0.0f ? lastDeltaTime : 0.016f;
@@ -41,53 +37,61 @@ public class GuiButton extends GuiComponent {
             hoverLerp = Math.max(0.0f, hoverLerp - speed);
         }
         com.x4yi.x4ui.client.gui.utils.ITheme theme = getTheme();
-        int baseBg, baseHoverBg, baseBorder;
+        int baseBg, baseHoverBg, idleBorder, hoverBorder;
         int primaryCol = theme.getPrimaryColor();
         switch (variant) {
             case PRIMARY:
                 baseBg = theme.getButtonPrimaryColor();
-                baseHoverBg = baseBg | 0x88000000;
-                baseBorder = baseBg;
+                baseHoverBg = brightenColor(baseBg, 0.14f);
+                idleBorder = baseBg;
+                hoverBorder = baseHoverBg;
                 break;
             case SECONDARY:
                 baseBg = theme.getButtonSecondaryColor();
-                baseHoverBg = baseBg | 0x88000000;
-                baseBorder = baseBg;
+                baseHoverBg = brightenColor(baseBg, 0.14f);
+                idleBorder = baseBg;
+                hoverBorder = baseHoverBg;
                 break;
             case SUCCESS:
                 baseBg = theme.getButtonSuccessColor();
-                baseHoverBg = baseBg | 0x88000000;
-                baseBorder = baseBg;
+                baseHoverBg = brightenColor(baseBg, 0.14f);
+                idleBorder = baseBg;
+                hoverBorder = baseHoverBg;
                 break;
             case DANGER:
                 baseBg = theme.getButtonDangerColor();
-                baseHoverBg = baseBg | 0x88000000;
-                baseBorder = baseBg;
+                baseHoverBg = brightenColor(baseBg, 0.14f);
+                idleBorder = baseBg;
+                hoverBorder = baseHoverBg;
                 break;
             case GHOST:
                 baseBg = 0x00000000;
                 baseHoverBg = theme.getButtonHoverColor();
-                baseBorder = primaryCol;
+                idleBorder = 0x00000000;
+                hoverBorder = theme.getCardBorderColor();
                 break;
             case DEFAULT:
             default:
                 baseBg = theme.getButtonBackgroundColor();
                 baseHoverBg = theme.getButtonHoverColor();
-                baseBorder = primaryCol;
+                idleBorder = theme.getCardBorderColor();
+                hoverBorder = primaryCol;
                 break;
         }
         if (selected) {
             baseBg = (variant == Variant.GHOST) ? theme.getButtonHoverColor() : primaryCol;
-            baseHoverBg = baseBg | 0x88000000;
-            baseBorder = primaryCol;
+            baseHoverBg = brightenColor(baseBg, 0.14f);
+            idleBorder = primaryCol;
+            hoverBorder = primaryCol;
         }
         if (!enabled) {
             baseBg = theme.getButtonDisabledColor();
             baseHoverBg = baseBg;
-            baseBorder = theme.getButtonDisabledColor();
+            idleBorder = theme.getCardBorderColor();
+            hoverBorder = idleBorder;
         }
         int currentBg = lerpColor(baseBg, baseHoverBg, hoverLerp);
-        int currentBorder = lerpColor(theme.getBackgroundColor(), baseBorder, hoverLerp);
+        int currentBorder = lerpColor(idleBorder, hoverBorder, hoverLerp);
         int absX = getAbsoluteX();
         int absY = getAbsoluteY();
         gfx.drawRect(absX, absY, width, height, currentBg);
@@ -124,6 +128,17 @@ public class GuiButton extends GuiComponent {
             )
         );
     }
+    private static int brightenColor(int color, float amount) {
+        int a = (color >>> 24) & 0xFF;
+        int r = (color >>> 16) & 0xFF;
+        int g = (color >>> 8) & 0xFF;
+        int b = color & 0xFF;
+        r = Math.min(255, (int) (r + (255 - r) * amount));
+        g = Math.min(255, (int) (g + (255 - g) * amount));
+        b = Math.min(255, (int) (b + (255 - b) * amount));
+        return (a << 24) | (r << 16) | (g << 8) | b;
+    }
+
     public void setText(String text) { this.text = text; }
     public String getText() { return text; }
     public void setOnClick(Runnable onClick) { this.onClick = onClick; }
