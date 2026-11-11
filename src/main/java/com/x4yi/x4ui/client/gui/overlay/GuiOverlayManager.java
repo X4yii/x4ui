@@ -2,7 +2,6 @@ package com.x4yi.x4ui.client.gui.overlay;
 import com.x4yi.x4ui.client.gui.base.GuiBaseScreen;
 import com.x4yi.x4ui.client.gui.component.GuiComponent;
 import com.x4yi.x4ui.client.gui.utils.DefaultTheme;
-import com.x4yi.x4ui.client.gui.utils.ScissorHelper;
 import com.x4yi.x4ui.impl.client.gui.GLGraphics;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiScreen;
@@ -14,8 +13,7 @@ import net.minecraftforge.fml.common.eventhandler.EventPriority;
 import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
-import org.lwjgl.input.Keyboard;
-import org.lwjgl.input.Mouse;
+import com.x4yi.x4ui.client.gui.input.UIInput;
 import java.awt.Rectangle;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -138,21 +136,16 @@ public final class GuiOverlayManager {
         for (IGuiOverlay overlay : active) {
             GuiComponent root = overlay.getRootComponent();
             if (root != null && root.isVisible()) {
-                GuiComponent hovered = root.getHoveredComponent(mouseX, mouseY);
-                GuiComponent tooltipSource = hovered;
-                while (tooltipSource != null && tooltipSource.getTooltipText() == null && tooltipSource.getTooltipComponent() == null) {
-                    tooltipSource = tooltipSource.getParent();
-                }
+                GuiComponent tooltipSource = root.getTooltipSource(mouseX, mouseY);
                 if (tooltipSource != null) {
+                    com.x4yi.x4ui.client.gui.utils.ITheme activeTheme = root.getTheme() != null ? root.getTheme() : com.x4yi.x4ui.client.gui.utils.ThemeRegistry.getCurrentTheme();
                     if (tooltipSource.getTooltipComponent() != null) {
-                        (root.getTheme() != null ? root.getTheme() : DefaultTheme.INSTANCE)
-                                .drawTooltipComponent(gfx, tooltipSource.getTooltipComponent(), mouseX, mouseY, screen.width, screen.height);
+                        activeTheme.drawTooltipComponent(gfx, tooltipSource.getTooltipComponent(), mouseX, mouseY, screen.width, screen.height);
                     } else if (tooltipSource.getTooltipText() != null) {
                         String text = tooltipSource.getTooltipText();
                         List<String> lines = (text.indexOf('\n') == -1) ?
                                 Collections.singletonList(text) : Arrays.asList(text.split("\n"));
-                        (root.getTheme() != null ? root.getTheme() : DefaultTheme.INSTANCE)
-                                .drawTooltip(gfx, lines, mouseX, mouseY, screen.width, screen.height);
+                        activeTheme.drawTooltip(gfx, lines, mouseX, mouseY, screen.width, screen.height);
                     }
                 }
             }
@@ -166,11 +159,11 @@ public final class GuiOverlayManager {
         if (active.isEmpty()) return;
         Minecraft mc = Minecraft.getMinecraft();
         if (mc == null || mc.displayWidth <= 0 || mc.displayHeight <= 0) return;
-        int mouseX = Mouse.getEventX() * screen.width / mc.displayWidth;
-        int mouseY = screen.height - Mouse.getEventY() * screen.height / mc.displayHeight - 1;
-        int button = Mouse.getEventButton();
-        boolean buttonState = Mouse.getEventButtonState();
-        int wheel = Mouse.getEventDWheel();
+        int mouseX = UIInput.safeMouseX(mc, screen.width);
+        int mouseY = UIInput.safeMouseY(mc, screen.height);
+        int button = UIInput.getEventButton();
+        boolean buttonState = UIInput.getEventButtonState();
+        int wheel = UIInput.getEventDWheel();
         if (wheel != 0) {
             for (IGuiOverlay overlay : active) {
                 GuiComponent root = overlay.getRootComponent();
@@ -204,7 +197,7 @@ public final class GuiOverlayManager {
                     }
                 }
             }
-        } else {
+        } else if (UIInput.isMouseButtonDown(0)) {
             for (IGuiOverlay overlay : active) {
                 GuiComponent root = overlay.getRootComponent();
                 if (root != null && root.isVisible() && root.contains(mouseX, mouseY)) {
@@ -219,9 +212,9 @@ public final class GuiOverlayManager {
         if (screen == null) return;
         List<IGuiOverlay> active = getActiveOverlays(screen);
         if (active.isEmpty()) return;
-        if (Keyboard.getEventKeyState()) {
-            char typedChar = Keyboard.getEventCharacter();
-            int keyCode = Keyboard.getEventKey();
+        if (UIInput.getEventKeyState()) {
+            char typedChar = UIInput.getEventCharacter();
+            int keyCode = UIInput.getEventKey();
             for (IGuiOverlay overlay : active) {
                 GuiComponent root = overlay.getRootComponent();
                 if (root != null && root.isVisible()) {
@@ -241,7 +234,7 @@ public final class GuiOverlayManager {
             for (IGuiOverlay overlay : active) {
                 overlay.onClosed(currentScreen);
             }
-            ScissorHelper.clear();
+            GLGraphics.INSTANCE.clearClip();
         }
         this.currentScreen = nextScreen;
     }

@@ -570,6 +570,11 @@ public class GLGraphics implements IGraphics {
             }
         }
     }
+
+    public void clearClip() {
+        clipDepth = 0;
+        GL11.glDisable(GL11.GL_SCISSOR_TEST);
+    }
     @Override
     public boolean isClipped(int x, int y, int width, int height) {
         if (clipDepth == 0) return false;
@@ -619,5 +624,34 @@ public class GLGraphics implements IGraphics {
             GlStateManager.tryBlendFuncSeparate(GlStateManager.SourceFactor.SRC_ALPHA, GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA, GlStateManager.SourceFactor.ONE, GlStateManager.DestFactor.ZERO);
             resetColor();
         }
+    }
+    @Override
+    public void clearDepthBuffer() {
+        GlStateManager.depthFunc(GL11.GL_LEQUAL);
+        GlStateManager.clear(GL11.GL_DEPTH_BUFFER_BIT);
+    }
+    @Override
+    public int createBgraTexture(int width, int height) {
+        int texId = GlStateManager.generateTexture();
+        GlStateManager.bindTexture(texId);
+        GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MIN_FILTER, GL11.GL_LINEAR);
+        GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MAG_FILTER, GL11.GL_LINEAR);
+        GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_S, org.lwjgl.opengl.GL12.GL_CLAMP_TO_EDGE);
+        GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_T, org.lwjgl.opengl.GL12.GL_CLAMP_TO_EDGE);
+        GL11.glTexImage2D(GL11.GL_TEXTURE_2D, 0, GL11.GL_RGBA8, width, height, 0, org.lwjgl.opengl.GL12.GL_BGRA, GL11.GL_UNSIGNED_BYTE, (java.nio.ByteBuffer) null);
+        return texId;
+    }
+    @Override
+    public void uploadBgraSubImage(int textureId, int width, int height, java.nio.ByteBuffer buffer) {
+        if (textureId == -1 || buffer == null) return;
+        GlStateManager.bindTexture(textureId);
+        buffer.position(0);
+        GL11.glTexSubImage2D(GL11.GL_TEXTURE_2D, 0, 0, 0, width, height, org.lwjgl.opengl.GL12.GL_BGRA, GL11.GL_UNSIGNED_BYTE, buffer);
+    }
+    @Override
+    public void uploadBgraSubImage(int textureId, int width, int height, java.nio.IntBuffer buffer) {
+        if (textureId == -1 || buffer == null) return;
+        GlStateManager.bindTexture(textureId);
+        GL11.glTexSubImage2D(GL11.GL_TEXTURE_2D, 0, 0, 0, width, height, org.lwjgl.opengl.GL12.GL_BGRA, org.lwjgl.opengl.GL12.GL_UNSIGNED_INT_8_8_8_8_REV, buffer);
     }
 }

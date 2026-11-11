@@ -53,4 +53,8 @@ public interface IGraphics {
     void drawItemStack(ItemStack stack, int x, int y);
     void drawItemStackWithOverlay(ItemStack stack, int x, int y, @Nullable String altText);
     void renderCustom(Consumer<Minecraft> customRenderer);
+    void clearDepthBuffer();
+    int createBgraTexture(int width, int height);
+    void uploadBgraSubImage(int textureId, int width, int height, java.nio.ByteBuffer buffer);
+    void uploadBgraSubImage(int textureId, int width, int height, java.nio.IntBuffer buffer);
 }

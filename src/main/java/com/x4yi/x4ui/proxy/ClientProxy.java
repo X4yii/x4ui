@@ -1,8 +1,20 @@
 package com.x4yi.x4ui.proxy;
 import com.x4yi.x4ui.api.client.media.IMediaService;
+import com.x4yi.x4ui.client.gui.ScreenRegistry;
 import com.x4yi.x4ui.client.gui.animation.GuiAnimator;
+import com.x4yi.x4ui.client.gui.base.GuiBaseContainer;
+import com.x4yi.x4ui.client.gui.base.GuiBaseScreen;
+import com.x4yi.x4ui.client.gui.bus.UIStateBus;
+import com.x4yi.x4ui.client.gui.component.GuiLabel;
+import com.x4yi.x4ui.client.gui.component.toast.GuiToast;
+import com.x4yi.x4ui.client.gui.component.toast.GuiToastManager;
+import com.x4yi.x4ui.common.network.PacketServerCommand;
+import com.x4yi.x4ui.common.network.UINetwork;
 import com.x4yi.x4ui.impl.client.media.MediaManager;
 import com.x4yi.x4ui.impl.client.media.MediaService;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.GuiScreen;
+import net.minecraft.nbt.NBTTagCompound;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.fml.common.event.FMLInitializationEvent;
 import net.minecraftforge.fml.common.event.FMLLoadCompleteEvent;
@@ -53,7 +65,7 @@ public class ClientProxy extends CommonProxy {
                             }
                         }
                     } catch (Throwable t) {
-                        System.err.println("[X4UI Media] Failed to parse manifest for " + modId + ": " + t.getMessage());
+                        org.apache.logging.log4j.LogManager.getLogger("x4ui").warn("[X4UI Media] Failed to parse manifest for {}: {}", modId, t.getMessage());
                     }
                 }
             }
@@ -85,8 +97,8 @@ public class ClientProxy extends CommonProxy {
             long maxWaitMs = 35000;
             if (ffmpegRequired) {
                 bar.step("X4UI: FFmpeg Media Engine");
-                while (!MediaManager.isFFmpegAvailable() && (System.currentTimeMillis() - startTime < maxWaitMs)) {
-                    try { Thread.sleep(100); } catch (InterruptedException ignored) { break; }
+                while (!MediaManager.isDownloadFinished() && (System.currentTimeMillis() - startTime < maxWaitMs)) {
+                    try { Thread.sleep(50); } catch (InterruptedException ignored) { break; }
                 }
             }
             for (int i = 0; i < tasks.size(); i++) {
@@ -109,9 +121,58 @@ public class ClientProxy extends CommonProxy {
             GuiAnimator.update();
         }
     }
+    @Override
+    public void handleClientStateSync(String key, Object value) {
+        Minecraft.getMinecraft().addScheduledTask(() -> UIStateBus.updateSyncedState(key, value));
+    }
+
+    @Override
+    public void handleClientCommand(byte command, String targetId, NBTTagCompound payload) {
+        Minecraft.getMinecraft().addScheduledTask(() -> {
+            Minecraft mc = Minecraft.getMinecraft();
+            if (command == PacketServerCommand.CMD_OPEN_SCREEN) {
+                NBTTagCompound tag = payload != null ? payload : new NBTTagCompound();
+                GuiScreen screen = ScreenRegistry.create(targetId, tag);
+                if (screen != null) {
+                    if (tag.hasKey(UINetwork.INTERNAL_CHANNEL_KEY)) {
+                        String ch = tag.getString(UINetwork.INTERNAL_CHANNEL_KEY);
+                        if (screen instanceof GuiBaseScreen) {
+                            ((GuiBaseScreen) screen).bindChannel(ch);
+                        } else if (screen instanceof GuiBaseContainer) {
+                            ((GuiBaseContainer) screen).bindChannel(ch);
+                        }
+                    }
+                    mc.displayGuiScreen(screen);
+                }
+            } else if (command == PacketServerCommand.CMD_CLOSE_SCREEN) {
+                mc.displayGuiScreen(null);
+            } else if (command == PacketServerCommand.CMD_SHOW_TOAST) {
+                NBTTagCompound tag = payload != null ? payload : new NBTTagCompound();
+                String title = tag.getString("title");
+                String message = tag.getString("message");
+                float duration = tag.hasKey("duration") ? tag.getFloat("duration") : 4.0f;
+                GuiToast toast = new GuiToast(220, 44).withDuration(duration);
+                toast.setPadding(new com.x4yi.x4ui.client.gui.utils.Insets(8));
+                toast.setFlexDirection(com.x4yi.x4ui.client.gui.component.layout.FlexDirection.VERTICAL);
+                toast.setGap(2);
+                if (!title.isEmpty()) {
+                    GuiLabel titleLabel = new GuiLabel(0, 0, title, 0xFFFFFFFF);
+                    toast.addChild(titleLabel);
+                }
+                if (!message.isEmpty()) {
+                    GuiLabel msgLabel = new GuiLabel(0, 0, message, 0xFFCCCCCC);
+                    toast.addChild(msgLabel);
+                }
+                GuiToastManager.INSTANCE.showToast(toast);
+            }
+        });
+    }
+
     @SubscribeEvent
     public void onClientDisconnect(net.minecraftforge.fml.common.network.FMLNetworkEvent.ClientDisconnectionFromServerEvent event) {
-        com.x4yi.x4ui.client.gui.bus.UIStateBus.clearSessionStates();
+        UINetwork.setServerSupported(false, null);
+        UIStateBus.clearScreenStates();
+        UIStateBus.clearSessionStates();
         GuiAnimator.clearAnimations();
     }
 }

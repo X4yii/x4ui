@@ -98,16 +98,39 @@ public class MediaPipeline {
             return failed;
         }
         String trimmed = urlStr.trim();
-        File localFile = new File(trimmed);
-        if (localFile.exists() && localFile.length() > 0) {
-            return CompletableFuture.completedFuture(localFile);
+        boolean isHttp = trimmed.startsWith("http://") || trimmed.startsWith("https://");
+        if (!isHttp) {
+            File localFile = new File(trimmed);
+            try {
+                File mcDir = (Minecraft.getMinecraft() != null && Minecraft.getMinecraft().mcDataDir != null)
+                        ? Minecraft.getMinecraft().mcDataDir.getCanonicalFile()
+                        : new File(".").getCanonicalFile();
+                File canonicalLocal = localFile.getCanonicalFile();
+                if (canonicalLocal.exists() && canonicalLocal.length() > 0
+                        && canonicalLocal.getPath().startsWith(mcDir.getPath() + File.separator)) {
+                    return CompletableFuture.completedFuture(canonicalLocal);
+                }
+            } catch (Exception ignored) {
+            }
+            CompletableFuture<File> failed = new CompletableFuture<>();
+            failed.completeExceptionally(new SecurityException("Invalid or disallowed media source: " + trimmed));
+            return failed;
         }
-        String hash = getSHA256(trimmed);
-        File modDir = new File(cacheRoot, modId.toLowerCase(Locale.ROOT));
-        if (!modDir.exists()) {
-            modDir.mkdirs();
+        String hash = com.x4yi.x4ui.impl.client.resource.network.SecurityUtils.sha256Hex(trimmed);
+        String safeModId = com.x4yi.x4ui.impl.client.resource.network.SecurityUtils.sanitizeModId(modId);
+        File modDir;
+        File optFile;
+        try {
+            modDir = com.x4yi.x4ui.impl.client.resource.network.SecurityUtils.resolveSafeChild(cacheRoot, safeModId);
+            if (!modDir.exists()) {
+                modDir.mkdirs();
+            }
+            optFile = com.x4yi.x4ui.impl.client.resource.network.SecurityUtils.resolveSafeChild(modDir, hash + "_opt.mp4");
+        } catch (Exception e) {
+            CompletableFuture<File> failed = new CompletableFuture<>();
+            failed.completeExceptionally(e);
+            return failed;
         }
-        File optFile = new File(modDir, hash + "_opt.mp4");
         if (optFile.exists() && optFile.length() > 1024) {
             if (listener != null) listener.onProgress("Cached", 100);
             return CompletableFuture.completedFuture(optFile);
@@ -150,53 +173,35 @@ public class MediaPipeline {
         return future;
     }
     private void downloadTo(String urlStr, File destination, MediaProgressListener listener) throws Exception {
-        URL url = new URL(urlStr);
-        URLConnection conn = url.openConnection();
-        if (conn instanceof java.net.HttpURLConnection) {
-            java.net.HttpURLConnection httpConn = (java.net.HttpURLConnection) conn;
-            httpConn.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)");
-            httpConn.setInstanceFollowRedirects(true);
-        }
-        conn.setConnectTimeout(10000);
-        conn.setReadTimeout(20000);
-
-        if (conn instanceof java.net.HttpURLConnection) {
-            int code = ((java.net.HttpURLConnection) conn).getResponseCode();
-            if (code >= 300 && code < 400) {
-                String newUrl = conn.getHeaderField("Location");
-                if (newUrl != null) {
-                    conn = new URL(newUrl).openConnection();
-                    if (conn instanceof java.net.HttpURLConnection) {
-                        ((java.net.HttpURLConnection) conn).setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)");
+        java.net.HttpURLConnection conn = com.x4yi.x4ui.impl.client.resource.network.SecurityUtils.openValidatedHttpConnection(urlStr);
+        try {
+            long contentLength = conn.getContentLengthLong();
+            if (contentLength > com.x4yi.x4ui.impl.client.resource.network.SecurityUtils.MAX_DOWNLOAD_BYTES) {
+                throw new java.io.IOException("Remote media exceeds max allowed size (" + contentLength + " bytes)");
+            }
+            try (InputStream is = conn.getInputStream();
+                 FileOutputStream fos = new FileOutputStream(destination)) {
+                byte[] buffer = new byte[16384];
+                long totalRead = 0;
+                int r;
+                int lastPercent = -1;
+                while ((r = is.read(buffer)) != -1) {
+                    totalRead += r;
+                    if (totalRead > com.x4yi.x4ui.impl.client.resource.network.SecurityUtils.MAX_DOWNLOAD_BYTES) {
+                        throw new java.io.IOException("Download exceeded max allowed size");
                     }
-                    conn.setConnectTimeout(10000);
-                    conn.setReadTimeout(20000);
-                }
-            }
-            code = ((java.net.HttpURLConnection) conn).getResponseCode();
-            if (code >= 400) {
-                throw new Exception("HTTP Error: " + code);
-            }
-        }
-
-        long contentLength = conn.getContentLengthLong();
-        try (InputStream is = conn.getInputStream();
-             FileOutputStream fos = new FileOutputStream(destination)) {
-            byte[] buffer = new byte[16384];
-            long totalRead = 0;
-            int r;
-            int lastPercent = -1;
-            while ((r = is.read(buffer)) != -1) {
-                fos.write(buffer, 0, r);
-                totalRead += r;
-                if (contentLength > 0 && listener != null) {
-                    int percent = (int) ((totalRead * 100) / contentLength);
-                    if (percent != lastPercent) {
-                        lastPercent = percent;
-                        listener.onProgress("Downloading", percent);
+                    fos.write(buffer, 0, r);
+                    if (contentLength > 0 && listener != null) {
+                        int percent = (int) ((totalRead * 100) / contentLength);
+                        if (percent != lastPercent) {
+                            lastPercent = percent;
+                            listener.onProgress("Downloading", percent);
+                        }
                     }
                 }
             }
+        } finally {
+            conn.disconnect();
         }
     }
     private void optimizeVideo(File source, File destination) {

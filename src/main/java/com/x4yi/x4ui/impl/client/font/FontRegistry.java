@@ -63,7 +63,7 @@ public class FontRegistry implements IResourceManagerReloadListener {
                 }
             }
         } catch (Exception e) {
-            System.err.println("[X4UI] Failed to load font '" + name + "' from " + location + ": " + e.getMessage());
+            org.apache.logging.log4j.LogManager.getLogger("x4ui").warn("[X4UI] Failed to load font '{}' from {}: {}", name, location, e.getMessage());
         }
         return VanillaFont.INSTANCE;
     }
@@ -74,7 +74,7 @@ public class FontRegistry implements IResourceManagerReloadListener {
             register(name, font);
             return font;
         } catch (Exception e) {
-            System.err.println("[X4UI] Failed to load font '" + name + "' from InputStream: " + e.getMessage());
+            org.apache.logging.log4j.LogManager.getLogger("x4ui").warn("[X4UI] Failed to load font '{}' from InputStream: {}", name, e.getMessage());
             return VanillaFont.INSTANCE;
         }
     }
@@ -101,7 +101,7 @@ public class FontRegistry implements IResourceManagerReloadListener {
                     register(name, font);
                 }
             } catch (Exception e) {
-                System.err.println("[X4UI] Error reloading font '" + name + "': " + e.getMessage());
+                org.apache.logging.log4j.LogManager.getLogger("x4ui").warn("[X4UI] Error reloading font '{}': {}", name, e.getMessage());
             }
         }
     }

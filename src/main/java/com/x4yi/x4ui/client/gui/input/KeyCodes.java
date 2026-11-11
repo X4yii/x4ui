@@ -1,0 +1,28 @@
+package com.x4yi.x4ui.client.gui.input;
+
+/**
+ * Backend-agnostic key code constants compatible with Forge (LWJGL 2) and CleanroomMC (LWJGL 3 / lwjgly).
+ * Consumer mods should reference these constants instead of importing {@code org.lwjgl.input.Keyboard}.
+ */
+public final class KeyCodes {
+    public static final int ESCAPE = 1;
+    public static final int BACKSPACE = 14;
+    public static final int TAB = 15;
+    public static final int ENTER = 28;
+    public static final int A = 30;
+    public static final int X = 45;
+    public static final int C = 46;
+    public static final int V = 47;
+    public static final int SPACE = 57;
+    public static final int NUMPAD_ENTER = 156;
+    public static final int HOME = 199;
+    public static final int UP = 200;
+    public static final int LEFT = 203;
+    public static final int RIGHT = 205;
+    public static final int END = 207;
+    public static final int DOWN = 208;
+    public static final int DELETE = 211;
+
+    private KeyCodes() {}
+}
+

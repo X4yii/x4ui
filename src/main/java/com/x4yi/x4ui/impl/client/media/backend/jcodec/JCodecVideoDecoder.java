@@ -215,7 +215,7 @@ public class JCodecVideoDecoder implements IVideoDecoder {
             } catch (Throwable e) {
                 if (running.get()) {
                     parent.setError("Decoder Error: " + e.getMessage());
-                    e.printStackTrace();
+                    org.apache.logging.log4j.LogManager.getLogger("x4ui").warn("[X4UI Video] JCodec decoder error: {}", e.getMessage());
                 }
             } finally {
                 NIOUtils.closeQuietly(ch);

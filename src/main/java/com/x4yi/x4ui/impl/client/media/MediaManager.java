@@ -1,75 +1,193 @@
 package com.x4yi.x4ui.impl.client.media;
 import net.minecraftforge.fml.common.ProgressManager;
-import org.apache.commons.io.FileUtils;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileOutputStream;
-import java.io.InputStream;
-import java.net.URL;
-import java.nio.channels.Channels;
-import java.nio.channels.ReadableByteChannel;
 import java.security.MessageDigest;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 public class MediaManager {
-    private static final String FFMPEG_URL_WIN = "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip";
+    private static final Logger LOGGER = LogManager.getLogger("x4ui");
     private static boolean mediaEngineRequired = false;
     private static AtomicBoolean downloadFinished = new AtomicBoolean(false);
     private static AtomicInteger downloadProgress = new AtomicInteger(0);
     private static String downloadStatus = "";
     private static File binDir;
-    private static File ffmpegExecutable;
+    private static volatile File ffmpegExecutable;
+    private static volatile String ffmpegSource = "not-found";
     public static void requireMediaEngine() {
         if (mediaEngineRequired) return;
         mediaEngineRequired = true;
         Thread downloader = new Thread(MediaManager::downloadFFmpegProcess);
-        downloader.setName("X4UI-FFmpeg-Downloader");
+        downloader.setName("X4UI-FFmpeg-Resolver");
         downloader.setDaemon(true);
         downloader.start();
     }
     public static void setBinDir(File minecraftDir) {
-        binDir = new File(minecraftDir, "x4ui/bin/");
-        if (!binDir.exists()) {
-            binDir.mkdirs();
+        if (minecraftDir != null) {
+            binDir = new File(minecraftDir, "x4ui/bin/");
         }
-        String os = System.getProperty("os.name").toLowerCase();
-        if (os.contains("win")) {
-            ffmpegExecutable = new File(binDir, "ffmpeg.exe");
+        resolveFFmpegExecutable();
+    }
+
+    /**
+     * Resolves the {@code ffmpeg} executable from:
+     * 1. Explicit {@code -Dx4ui.ffmpeg.path} property or {@code X4UI_FFMPEG} env var
+     * 2. System {@code PATH}
+     * 3. Standard OS install paths (Linux, macOS, Windows 10/11)
+     * 4. Instance fallback ({@code <minecraft>/x4ui/bin/ffmpeg(.exe)})
+     */
+    public static synchronized File resolveFFmpegExecutable() {
+        String os = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
+        boolean isWindows = os.contains("win");
+        String exeName = isWindows ? "ffmpeg.exe" : "ffmpeg";
+
+        // 1. Explicit override
+        String propOverride = System.getProperty("x4ui.ffmpeg.path");
+        if (propOverride != null && !propOverride.trim().isEmpty()) {
+            File f = new File(propOverride.trim());
+            if (isValidExecutable(f)) {
+                ffmpegExecutable = f;
+                ffmpegSource = "system-property";
+                return f;
+            }
+        }
+        String envOverride = System.getenv("X4UI_FFMPEG");
+        if (envOverride != null && !envOverride.trim().isEmpty()) {
+            File f = new File(envOverride.trim());
+            if (isValidExecutable(f)) {
+                ffmpegExecutable = f;
+                ffmpegSource = "env-var";
+                return f;
+            }
+        }
+
+        // 2. System PATH
+        String pathEnv = System.getenv("PATH");
+        if (pathEnv != null && !pathEnv.isEmpty()) {
+            String[] dirs = pathEnv.split(File.pathSeparator);
+            for (String dir : dirs) {
+                if (dir == null || dir.trim().isEmpty()) continue;
+                File candidate = new File(dir.trim(), exeName);
+                if (isValidExecutable(candidate)) {
+                    ffmpegExecutable = candidate;
+                    ffmpegSource = "system-path";
+                    return candidate;
+                }
+            }
+        }
+
+        // 3. Common OS-specific installation paths
+        for (File candidate : getOsCandidatePaths(os, exeName)) {
+            if (isValidExecutable(candidate)) {
+                ffmpegExecutable = candidate;
+                ffmpegSource = "os-location";
+                return candidate;
+            }
+        }
+
+        // 4. Instance fallback
+        if (binDir != null) {
+            File fallback = new File(binDir, exeName);
+            if (isValidExecutable(fallback)) {
+                ffmpegExecutable = fallback;
+                ffmpegSource = "instance-bin";
+                return fallback;
+            }
+        }
+
+        ffmpegExecutable = null;
+        ffmpegSource = "not-found";
+        return null;
+    }
+
+    private static List<File> getOsCandidatePaths(String osLower, String exeName) {
+        List<File> candidates = new ArrayList<>();
+        String userHome = System.getProperty("user.home", "");
+        if (osLower.contains("win")) {
+            String localAppData = System.getenv("LOCALAPPDATA");
+            String programFiles = System.getenv("ProgramFiles");
+            String programFilesX86 = System.getenv("ProgramFiles(x86)");
+            String programData = System.getenv("ProgramData");
+            if (localAppData != null) {
+                candidates.add(new File(localAppData, "Microsoft/WinGet/Links/" + exeName));
+                candidates.add(new File(localAppData, "Programs/ffmpeg/bin/" + exeName));
+            }
+            if (!userHome.isEmpty()) {
+                candidates.add(new File(userHome, "scoop/shims/" + exeName));
+            }
+            if (programData != null) {
+                candidates.add(new File(programData, "chocolatey/bin/" + exeName));
+            }
+            candidates.add(new File("C:/ffmpeg/bin/" + exeName));
+            if (programFiles != null) {
+                candidates.add(new File(programFiles, "ffmpeg/bin/" + exeName));
+            }
+            if (programFilesX86 != null) {
+                candidates.add(new File(programFilesX86, "ffmpeg/bin/" + exeName));
+            }
+        } else if (osLower.contains("mac") || osLower.contains("darwin")) {
+            candidates.add(new File("/opt/homebrew/bin/" + exeName));
+            candidates.add(new File("/usr/local/bin/" + exeName));
+            candidates.add(new File("/opt/local/bin/" + exeName));
+            if (!userHome.isEmpty()) {
+                candidates.add(new File(userHome, ".local/bin/" + exeName));
+            }
         } else {
-            ffmpegExecutable = new File(binDir, "ffmpeg");
-            if (ffmpegExecutable.exists()) {
-                ffmpegExecutable.setExecutable(true);
+            candidates.add(new File("/usr/bin/" + exeName));
+            candidates.add(new File("/usr/local/bin/" + exeName));
+            candidates.add(new File("/snap/bin/" + exeName));
+            candidates.add(new File("/var/lib/flatpak/exports/bin/" + exeName));
+            candidates.add(new File("/home/linuxbrew/.linuxbrew/bin/" + exeName));
+            if (!userHome.isEmpty()) {
+                candidates.add(new File(userHome, ".local/bin/" + exeName));
             }
         }
+        return candidates;
     }
+
+    private static boolean isValidExecutable(File file) {
+        if (file == null || !file.isFile()) {
+            return false;
+        }
+        if (!file.canExecute()) {
+            file.setExecutable(true);
+        }
+        return file.length() > 1024 && file.canExecute();
+    }
+
     public static boolean isFFmpegAvailable() {
-        if (ffmpegExecutable != null && ffmpegExecutable.exists()) {
-            if (!ffmpegExecutable.canExecute()) {
-                ffmpegExecutable.setExecutable(true);
-            }
-            return ffmpegExecutable.length() > 1024 && ffmpegExecutable.canExecute();
+        if (ffmpegExecutable == null) {
+            resolveFFmpegExecutable();
         }
-        return false;
+        return isValidExecutable(ffmpegExecutable);
     }
+
+    public static String getFFmpegSource() {
+        return ffmpegSource;
+    }
+
     private static void downloadFFmpegProcess() {
         try {
-            downloadStatus = "Checking FFmpeg Cache...";
-            if (isFFmpegAvailable()) {
-                downloadStatus = "Verifying Integrity...";
-                String hash = getSHA256(ffmpegExecutable);
-                downloadFinished.set(true);
-                System.out.println("[X4UI Media] FFmpeg is ready! Hash: " + hash);
-                return;
+            downloadStatus = "Locating OS FFmpeg...";
+            downloadProgress.set(30);
+            File resolved = resolveFFmpegExecutable();
+            if (resolved != null) {
+                downloadStatus = "FFmpeg found (" + ffmpegSource + ")";
+                String hash = getSHA256(resolved);
+                downloadProgress.set(100);
+                LOGGER.info("[X4UI Media] FFmpeg ready ({}): {} [sha256={}]", ffmpegSource, resolved.getAbsolutePath(), hash);
+            } else {
+                downloadStatus = "FFmpeg not found on OS (JCodec fallback active)";
+                downloadProgress.set(100);
+                LOGGER.warn("[X4UI Media] FFmpeg executable not found in PATH or standard OS directories; video playback will fall back to JCodec.");
             }
-            downloadStatus = "Downloading FFmpeg...";
-            downloadProgress.set(0);
-            downloadProgress.set(100);
-            downloadFinished.set(true);
-            downloadStatus = "FFmpeg verification complete.";
         } catch (Exception e) {
-            System.err.println("[X4UI Media] FFmpeg Verification/Download Failed: " + e.getMessage());
-            e.printStackTrace();
-            downloadFinished.set(true); 
+            LOGGER.warn("[X4UI Media] FFmpeg resolution failed: {}", e.getMessage());
         } finally {
             downloadFinished.set(true);
         }

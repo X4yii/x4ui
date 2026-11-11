@@ -72,8 +72,7 @@ public class GuiModelRender extends GuiComponent {
                 GlStateManager.pushMatrix();
                 GlStateManager.enableDepth();
                 GlStateManager.depthMask(true);
-                GlStateManager.depthFunc(org.lwjgl.opengl.GL11.GL_LEQUAL);
-                GlStateManager.clear(org.lwjgl.opengl.GL11.GL_DEPTH_BUFFER_BIT);
+                gfx.clearDepthBuffer();
                 GlStateManager.translate(centerX + offsetX, centerY + offsetY, offsetZ);
                 float itemScale = scale / 16.0f;
                 GlStateManager.scale(itemScale, itemScale, 1.0f);
@@ -90,8 +89,7 @@ public class GuiModelRender extends GuiComponent {
                 GlStateManager.enableColorMaterial();
                 GlStateManager.enableDepth();
                 GlStateManager.depthMask(true);
-                GlStateManager.depthFunc(org.lwjgl.opengl.GL11.GL_LEQUAL);
-                GlStateManager.clear(org.lwjgl.opengl.GL11.GL_DEPTH_BUFFER_BIT);
+                gfx.clearDepthBuffer();
                 GlStateManager.enableRescaleNormal();
                 GlStateManager.pushMatrix();
                 GlStateManager.color(1.0F, 1.0F, 1.0F, 1.0F);

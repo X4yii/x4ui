@@ -1,14 +1,17 @@
 package com.x4yi.x4ui.client.gui.component;
 import net.minecraft.client.gui.Gui;
 import net.minecraft.client.renderer.GlStateManager;
-import org.lwjgl.opengl.GL11;
-import org.lwjgl.opengl.GL12;
+import com.x4yi.x4ui.impl.client.gui.GLGraphics;
 import com.x4yi.x4ui.impl.client.media.MediaPlayer;
 import com.x4yi.x4ui.api.client.media.IVideoDecoder;
 import com.x4yi.x4ui.api.client.media.VideoFrame;
 import com.x4yi.x4ui.impl.client.media.backend.ffmpeg.FFmpegProcessDecoder;
 import com.x4yi.x4ui.impl.client.media.backend.jcodec.JCodecVideoDecoder;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+import java.util.function.Consumer;
 public class GuiVideo extends GuiComponent {
+    private static final Logger LOGGER = LogManager.getLogger("x4ui");
     private String videoUrl;
     private int glTextureId = -1;
     private boolean hasUploadedFirstFrame = false;
@@ -25,6 +28,17 @@ public class GuiVideo extends GuiComponent {
     private boolean controlsEnabled = true;
     private String loadingStatus = null;
     private int loadingProgress = -1;
+    private volatile String videoError = null;
+    private Consumer<String> onError = null;
+
+    public GuiVideo withOnError(Consumer<String> onError) {
+        this.onError = onError;
+        return this;
+    }
+
+    public String getVideoError() {
+        return videoError;
+    }
     public GuiVideo(int x, int y, int width, int height) {
         super(x, y, width, height);
         mediaPlayer = new MediaPlayer();
@@ -153,8 +167,31 @@ public class GuiVideo extends GuiComponent {
         hasUploadedFirstFrame = false;
         lastUploadedPts = -1.0;
     }
+    private void reportVideoError(String msg, Throwable cause) {
+        String finalMsg = (msg != null && !msg.isEmpty()) ? msg : "Unknown video playback error";
+        this.videoError = finalMsg;
+        if (cause != null) {
+            LOGGER.warn("[X4UI Video] {}: {}", finalMsg, cause.getMessage());
+        } else {
+            LOGGER.warn("[X4UI Video] {}", finalMsg);
+        }
+        net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getMinecraft();
+        Runnable uiUpdate = () -> {
+            setLoadingState("Error: " + finalMsg, -1);
+            if (onError != null) {
+                onError.accept(finalMsg);
+            }
+        };
+        if (mc != null) {
+            mc.addScheduledTask(uiUpdate);
+        } else {
+            uiUpdate.run();
+        }
+    }
+
     private void initVideo() {
         if (videoUrl == null) return;
+        this.videoError = null;
         setLoadingState("Loading", -1);
         com.x4yi.x4ui.impl.client.media.MediaPipeline.getInstance().obtainMedia("global", videoUrl, (status, percent) -> {
             net.minecraft.client.Minecraft.getMinecraft().addScheduledTask(() -> {
@@ -162,25 +199,40 @@ public class GuiVideo extends GuiComponent {
             });
         }).whenComplete((file, err) -> {
             if (err != null) {
-                net.minecraft.client.Minecraft.getMinecraft().addScheduledTask(() -> {
-                    setLoadingState("Error: " + err.getMessage(), -1);
-                });
+                reportVideoError(err.getMessage() != null ? err.getMessage() : "Download/cache failed", err);
+                return;
+            }
+            if (file == null || !file.exists()) {
+                reportVideoError("Resolved media file does not exist", null);
                 return;
             }
             net.minecraft.client.Minecraft.getMinecraft().addScheduledTask(this::clearLoadingState);
             String localPath = file.getAbsolutePath();
             try {
-                IVideoDecoder decoder = com.x4yi.x4ui.impl.client.media.MediaManager.isFFmpegAvailable() ?
+                boolean useFfmpeg = com.x4yi.x4ui.impl.client.media.MediaManager.isFFmpegAvailable();
+                IVideoDecoder decoder = useFfmpeg ?
                         new com.x4yi.x4ui.impl.client.media.backend.ffmpeg.DirectMemoryVideoDecoder() :
                         new com.x4yi.x4ui.impl.client.media.backend.jcodec.JCodecVideoDecoder();
                 decoder.init(localPath);
+                if (decoder.isError()) {
+                    reportVideoError(decoder.getErrorMessage(), null);
+                    return;
+                }
                 mediaPlayer.setVideoDecoder(decoder);
-                if (audioEnabled && com.x4yi.x4ui.impl.client.media.MediaManager.isFFmpegAvailable()) {
-                    com.x4yi.x4ui.impl.client.media.backend.ffmpeg.FFmpegAudioDecoder audioDecoder = new com.x4yi.x4ui.impl.client.media.backend.ffmpeg.FFmpegAudioDecoder();
-                    audioDecoder.setVolume(audioVolume);
-                    audioDecoder.setMuted(audioMuted);
-                    audioDecoder.init(localPath);
-                    mediaPlayer.setAudioDecoder(audioDecoder);
+                if (audioEnabled && useFfmpeg) {
+                    try {
+                        com.x4yi.x4ui.impl.client.media.backend.ffmpeg.FFmpegAudioDecoder audioDecoder = new com.x4yi.x4ui.impl.client.media.backend.ffmpeg.FFmpegAudioDecoder();
+                        audioDecoder.setVolume(audioVolume);
+                        audioDecoder.setMuted(audioMuted);
+                        audioDecoder.init(localPath);
+                        if (!audioDecoder.isError()) {
+                            mediaPlayer.setAudioDecoder(audioDecoder);
+                        } else {
+                            LOGGER.warn("[X4UI Video] Audio decoder disabled for '{}': {}", videoUrl, audioDecoder.getErrorMessage());
+                        }
+                    } catch (Exception audioEx) {
+                        LOGGER.warn("[X4UI Video] Audio init failed for '{}' (continuing muted): {}", videoUrl, audioEx.getMessage());
+                    }
                 }
                 net.minecraft.client.Minecraft.getMinecraft().addScheduledTask(() -> {
                     int w = decoder.getVideoWidth();
@@ -189,18 +241,12 @@ public class GuiVideo extends GuiComponent {
                         if (glTextureId != -1) {
                             GlStateManager.deleteTexture(glTextureId);
                         }
-                        glTextureId = GlStateManager.generateTexture();
+                        glTextureId = GLGraphics.INSTANCE.createBgraTexture(w, h);
                         hasUploadedFirstFrame = false;
-                        GlStateManager.bindTexture(glTextureId);
-                        GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MIN_FILTER, GL11.GL_LINEAR);
-                        GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MAG_FILTER, GL11.GL_LINEAR);
-                        GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_S, GL11.GL_CLAMP);
-                        GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_WRAP_T, GL11.GL_CLAMP);
-                        GL11.glTexImage2D(GL11.GL_TEXTURE_2D, 0, GL11.GL_RGBA8, w, h, 0, GL12.GL_BGRA, GL11.GL_UNSIGNED_BYTE, (java.nio.ByteBuffer) null);
                     }
                 });
             } catch (Exception e) {
-                e.printStackTrace();
+                reportVideoError(e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName(), e);
             }
         });
     }
@@ -209,12 +255,11 @@ public class GuiVideo extends GuiComponent {
         int absX = getAbsoluteX();
         int absY = getAbsoluteY();
         IVideoDecoder decoder = mediaPlayer.getVideoDecoder();
-        if (decoder != null && decoder.isError()) {
-            gfx.drawRect(absX, absY, width, height, 0xFF000000);
-            String err = decoder.getErrorMessage();
-            if (err != null) {
-                gfx.drawString(err, absX + 5, absY + height / 2.0f - 4, 0xFF5555, true);
-            }
+        String activeErr = (decoder != null && decoder.isError()) ? decoder.getErrorMessage() : this.videoError;
+        if (activeErr != null && !activeErr.isEmpty()) {
+            gfx.drawRect(absX, absY, width, height, 0xFF101216);
+            gfx.drawBorder(absX, absY, width, height, 1, 0xFF2E3442);
+            gfx.drawSplitString(activeErr, absX + 8, absY + 8, Math.max(20, width - 16), 0xFFEF4444, false);
             return;
         }
         if (decoder == null && videoUrl == null) {
@@ -229,23 +274,14 @@ public class GuiVideo extends GuiComponent {
                     com.x4yi.x4ui.impl.client.media.backend.ffmpeg.DirectMemoryVideoDecoder dmvd = (com.x4yi.x4ui.impl.client.media.backend.ffmpeg.DirectMemoryVideoDecoder) decoder;
                     java.nio.ByteBuffer byteBuffer = dmvd.getDirectBufferFrame();
                     if (byteBuffer != null) {
-                        GlStateManager.bindTexture(glTextureId);
-                        byteBuffer.position(0);
-                        GL11.glTexSubImage2D(GL11.GL_TEXTURE_2D, 0, 0, 0, 
-                            decoder.getVideoWidth(), decoder.getVideoHeight(), 
-                            GL12.GL_BGRA, GL11.GL_UNSIGNED_BYTE, 
-                            byteBuffer);
+                        gfx.uploadBgraSubImage(glTextureId, decoder.getVideoWidth(), decoder.getVideoHeight(), byteBuffer);
                         hasUploadedFirstFrame = true;
                         lastUploadedPts = frame.pts;
                         dmvd.popFrame();
                     }
                 } else if (frame.pixels != null) {
                     java.nio.IntBuffer intBuf = java.nio.IntBuffer.wrap(frame.pixels);
-                    GlStateManager.bindTexture(glTextureId);
-                    GL11.glTexSubImage2D(GL11.GL_TEXTURE_2D, 0, 0, 0, 
-                        decoder.getVideoWidth(), decoder.getVideoHeight(), 
-                        GL12.GL_BGRA, GL12.GL_UNSIGNED_INT_8_8_8_8_REV, 
-                        intBuf);
+                    gfx.uploadBgraSubImage(glTextureId, decoder.getVideoWidth(), decoder.getVideoHeight(), intBuf);
                     hasUploadedFirstFrame = true;
                     lastUploadedPts = frame.pts;
                 }

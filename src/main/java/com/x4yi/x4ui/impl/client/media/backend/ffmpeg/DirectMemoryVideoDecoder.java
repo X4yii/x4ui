@@ -131,17 +131,7 @@ public class DirectMemoryVideoDecoder implements IVideoDecoder {
         }
     }
     private static void cleanDirectBuffer(ByteBuffer buffer) {
-        try {
-            java.lang.reflect.Method cleanerMethod = buffer.getClass().getMethod("cleaner");
-            cleanerMethod.setAccessible(true);
-            Object cleaner = cleanerMethod.invoke(buffer);
-            if (cleaner != null) {
-                java.lang.reflect.Method cleanMethod = cleaner.getClass().getMethod("clean");
-                cleanMethod.setAccessible(true);
-                cleanMethod.invoke(cleaner);
-            }
-        } catch (Throwable ignored) {
-        }
+        com.x4yi.x4ui.common.platform.PlatformBridge.cleanDirectBuffer(buffer);
     }
     @Override
     public int getVideoWidth() {
@@ -283,7 +273,7 @@ public class DirectMemoryVideoDecoder implements IVideoDecoder {
                     frameIndex++;
                 }
             } catch (Exception e) {
-                e.printStackTrace();
+                org.apache.logging.log4j.LogManager.getLogger("x4ui").warn("[X4UI Video] FFmpeg process error: {}", e.getMessage());
                 if (running.get()) {
                     String msg = (e.getMessage() != null && !e.getMessage().isEmpty()) ? e.getMessage() : e.getClass().getSimpleName();
                     setError("FFmpeg Process Error: " + msg);
