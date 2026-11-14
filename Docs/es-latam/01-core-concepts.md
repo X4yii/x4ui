@@ -67,29 +67,31 @@ score.set(10); // Actualiza la etiqueta automáticamente
 
 ---
 
-## 5. Bus Global de Estados (`UIStateBus`)
+## 5. Bus de Estados (`UIStateBus`)
 
-Para comunicar módulos o interfaces independientes sin acoplamiento directo, X4UI provee `UIStateBus`:
+Para comunicar módulos o sincronizar datos con el servidor sin acoplamiento directo, `UIStateBus` soporta tres alcances:
+- `Scope.SCREEN`: se limpia automáticamente al cerrar la pantalla (`GuiBaseScreen.onGuiClosed()`), ideal con `syncedState(key, valor)`.
+- `Scope.SESSION`: sobrevive al cierre de pantallas y se limpia al desconectarse del servidor.
+- `Scope.GLOBAL`: persiste durante toda la ejecución del cliente.
 
 ```java
-// Publicar un evento o estado
-UIStateBus.publish(new UserProfileUpdatedEvent(userId, newName));
+// Estado por pantalla con namespace (evita colisiones entre bloques/entidades)
+String key = UIStateBus.scopedKey("tile:10,64,10", "energy");
+State<Integer> energy = UIStateBus.getOrCreate(key, 0, UIStateBus.Scope.SCREEN);
 
-// Suscribirse al evento
-UIStateBus.subscribe(UserProfileUpdatedEvent.class, event -> {
-    System.out.println("Perfil actualizado: " + event.getName());
-});
+// Estado global compartido
+State<Double> power = UIStateBus.getOrCreate("mimod:power", 1.0, UIStateBus.Scope.GLOBAL);
 ```
 
 ---
 
 ## 6. Sistema de Temas (`ITheme` y `ThemeRegistry`)
 
-Los estilos visuales están encapsulados en la interfaz `ITheme`. `DefaultTheme.INSTANCE` provee una paleta oscura estándar. Los componentes buscan su tema subiendo por la cadena de ancestros hasta llegar al tema predeterminado.
+Los estilos visuales están encapsulados en la interfaz `ITheme`. `DefaultTheme.INSTANCE` provee una paleta oscura estándar. Los componentes heredan el tema de su cadena de ancestros o de `ThemeRegistry.getCurrentTheme()`.
 
 ```java
-ThemeRegistry.register("mi_tema_oscuro", customTheme);
-rootPanel.setTheme(ThemeRegistry.get("mi_tema_oscuro"));
+ThemeRegistry.registerTheme("mi_tema_oscuro", customTheme);
+rootPanel.setTheme(ThemeRegistry.getTheme("mi_tema_oscuro"));
 ```
 
 ---

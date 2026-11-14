@@ -139,4 +139,8 @@ public class HeadlessGraphics implements IGraphics {
     @Override public void drawItemStack(ItemStack stack, int x, int y) { drawCallCount++; }
     @Override public void drawItemStackWithOverlay(ItemStack stack, int x, int y, @Nullable String altText) { drawCallCount++; }
     @Override public void renderCustom(Consumer<Minecraft> customRenderer) { drawCallCount++; }
+    @Override public void clearDepthBuffer() {}
+    @Override public int createBgraTexture(int width, int height) { return 1; }
+    @Override public void uploadBgraSubImage(int textureId, int width, int height, java.nio.ByteBuffer buffer) { drawCallCount++; }
+    @Override public void uploadBgraSubImage(int textureId, int width, int height, java.nio.IntBuffer buffer) { drawCallCount++; }
 }

@@ -49,15 +49,26 @@ badge.withPercentPosition(0.5f, 0.1f);
 
 ---
 
-### Pilar 2: `FlexLayout` como Motor Único de Disposición
+### Pilar 2: `FlexLayout`, Alineación (`FlexAlign`) y Primitivas Fluentes
 
-Siempre que agrupe varios elementos, utilice un contenedor con `FlexLayout` en lugar de asignar `withPercentPosition` a cada elemento. El `FlexLayout` apilará y ordenará los componentes de manera inteligente y elástica.
+Siempre que agrupe varios elementos, utilice los constructores semánticos de `GuiPanel` en lugar de calcular coordenadas manuales:
 
 ```java
-GuiPanel gridContainer = new GuiPanel(0, 0, 0, 0).withPercentWidth(1.0f);
-gridContainer.setFlexDirection(FlexDirection.VERTICAL);
-gridContainer.setGap(8); // Separación automática entre elementos
+// Ventana modal centrada estándar (con dimBackground automático en GuiBaseScreen)
+GuiPanel window = createCenteredWindow(420, 300);
+
+// Encabezado en fila con título a la izquierda y botón cerrar a la derecha
+GuiPanel header = GuiPanel.row(8);
+header.addChild(new GuiLabel(0, 0, "Panel de Control", 0xFFFFFFFF));
+header.addChild(GuiPanel.spacer());
+header.addChild(new GuiButton(0, 0, 20, 20, "X", this::closeScreen));
+
+// Tarjeta de sección con tema, padding y altura automática (hugContent)
+GuiPanel section = GuiPanel.card(10, 6);
 ```
+
+#### Alineación con `FlexAlign`:
+`FlexLayout` soporta `FlexAlign.START`, `CENTER`, `END` y `STRETCH` tanto en el eje transversal (`setAlignItems`) como en el eje principal (`setJustifyContent`), además de `GuiPanel.spacer()` para empujar elementos a los extremos.
 
 #### Control de Tamaño del Contenedor Padre (`hugContent`):
 Por defecto en `r1.0b5`, `FlexLayout` es **no destructivo** (`hugContent = false`): respeta fielmente el tamaño del contenedor padre si este tiene dimensiones fijas o responsivas por porcentaje (`withPercentWidth`/`withPercentHeight`).
@@ -95,9 +106,8 @@ En GUI Scale 1x y 2x, la altura de la pantalla es grande y el `GuiScrollPanel` n
 El contenedor interno de un `GuiScrollPanel` se expone mediante `.getContentPanel()`. Para asegurar que todo su interior crezca responsivamente, use la regla del Pilar 2:
 
 ```java
-GuiScrollPanel scrollPanel = (GuiScrollPanel) new GuiScrollPanel(0, 0, 0, 300).withPercentWidth(1.0f);
-scrollPanel.getContentPanel().setFlexDirection(FlexDirection.VERTICAL);
-scrollPanel.getContentPanel().withPercentWidth(1.0f); // ¡Obligatorio!
+// Scroll vertical responsivo listo para usar (contentPanel ya usa VERTICAL, hugContent=true y 100% ancho)
+GuiScrollPanel scrollPanel = GuiScrollPanel.vertical(180, 6);
 ```
 
 ---
