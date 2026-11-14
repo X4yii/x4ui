@@ -1,41 +1,42 @@
-# Multimedia Components (Videos and Images)
+# Multimedia Components (`GuiImage` & `GuiVideo`)
 
-In X4UI, the multimedia components are designed under strict adherence to the Liskov Substitution Principle.
+X4UI's multimedia components manage asynchronous loading locally within their own bounds without blocking the render thread.
 
-## GuiImage (Static Images and 9-Slice)
+---
 
-`GuiImage` handles both packaged textures (`ResourceLocation`) and images downloaded from the web, with support for normal rendering and **NineSlice** scaling.
+## `GuiImage` (Static, Remote & 9-Slice Images)
 
-### Loading Web Textures
+`GuiImage` supports both packaged textures (`ResourceLocation`) and asynchronously downloaded remote images via `setUrl(String)`:
 
 ```java
 GuiImage banner = (GuiImage) new GuiImage(0, 0, 0, 150).withPercentWidth(1.0f);
-// Asynchronous download; the game thread is not blocked
-banner.setImage("https://example.com/background.jpg");
+banner.setUrl("https://example.com/banner.png");
+
+// Or with a local ResourceLocation and 9-slice border scaling
+banner.setResource(new ResourceLocation("mymod", "textures/gui/panel.png"));
+banner.withNineSlice(new NineSliceConfig(4, 4, 4, 4));
+banner.setNineSliceEnabled(true);
 ```
 
-### 9-Slice Configurations
-The way to apply slice margins is by instantiating a `NineSliceConfig`:
+---
 
-```java
-// Configure the 9-slice margins for the texture
-banner.setNineSliceConfig(new NineSliceConfig(4, 4, 4, 4));
-// Instruct GuiImage to draw using the protected borders
-banner.setMode(GuiImage.ImageMode.NINESLICE);
-```
+## `GuiVideo` (Asynchronous Video Player)
 
-## GuiVideo (FFmpeg Player)
-
-`GuiVideo` is a fully independent entity extending `GuiComponent`.
-It manages its own asynchronous frame renderer tied directly to the `MediaPipeline` promises.
+`GuiVideo` plays video and audio asynchronously on top of `MediaPipeline` (using OS-discovered `ffmpeg` or JCodec fallback), with built-in status display, optional controls, and error handling:
 
 ```java
 GuiVideo introVideo = (GuiVideo) new GuiVideo(0, 0, 0, 240).withPercentWidth(1.0f);
 
-introVideo.setVideo("https://example.com/my_intro.mp4");
-introVideo.setLooping(true); // Repeat when finished
-introVideo.setVolume(0.5f);  // Volume at 50%
+introVideo.setVideoUrl("https://example.com/my_intro.mp4");
+introVideo.setVolume(0.5f);
+introVideo.setControlsEnabled(true);
+introVideo.withOnError(err -> {
+    // Optional: react when download or decoding fails
+    System.err.println("Video error: " + err);
+});
+introVideo.play();
 ```
 
-### Integrated Loading Bar
-Upon starting the video download, the component will internally render a loading spinner. It will NOT inject `Toasts` into the global manager, keeping your screen entirely clean of popups even if you are iterating over heavy multimedia menus.
+### Loading & Error Handling
+- While downloading or preparing media, `GuiVideo` renders an internal progress bar inside its bounds.
+- On network or codec failure, `GuiVideo` safely cleans up its resources, renders the diagnostic error state (`getVideoError()`), and invokes the `withOnError(...)` callback if registered.

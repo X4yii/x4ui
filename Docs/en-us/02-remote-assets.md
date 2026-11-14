@@ -1,32 +1,33 @@
-# 02 - Remote Assets & Asynchrony (MediaPipeline)
+# 02 - Remote Assets & Asynchrony (`MediaPipeline`)
 
-This document describes how X4UI handles asynchronous operations such as downloading images or processing FFmpeg videos in the background using the decoupled `MediaPipeline`.
+This document explains how X4UI downloads, validates, and processes external media in the background using `MediaPipeline` and `MediaManager` without blocking the main render thread.
+
+*(For ready-to-use UI widgets, see **Multimedia Components** in `components/multimedia.md`.)*
 
 ---
 
 ## 1. The Decoupled Asynchrony Paradigm
 
-The `MediaPipeline` is completely decoupled from the UI. It returns `CompletableFuture`s, allowing the caller (or the specific GUI component) to decide when and how to notify the user.
+`MediaPipeline` is completely decoupled from the UI. It returns `CompletableFuture` promises so the caller decides **when** and **how** to update the interface.
 
 ---
 
-## 2. Using MediaPipeline
+## 2. Using `MediaPipeline`
 
-When downloading or processing external media in a sandboxed, per-mod cached pipeline, invoke `MediaPipeline`:
+To download or process external media in a per-mod sandboxed cache (`.minecraft/x4ui/cache/<modid>/`), invoke `MediaPipeline`:
 
 ```java
 import com.x4yi.x4ui.impl.client.media.MediaPipeline;
 
-// Fetch media with per-mod cache isolation (.minecraft/x4ui/cache/<modid>/)
-CompletableFuture<File> mediaFuture = MediaPipeline.getInstance().obtainMedia("mymodid", "https://example.com/video.mp4", (status, percent) -> {
-    System.out.println("Progress [" + status + "]: " + percent + "%");
-});
+CompletableFuture<File> mediaFuture = MediaPipeline.getInstance().obtainMedia(
+    "mymodid",
+    "https://example.com/video.mp4",
+    (status, percent) -> System.out.println("Progress [" + status + "]: " + percent + "%")
+);
 
 mediaFuture.thenAccept(file -> {
-    // Media was successfully downloaded, optimized, and cached
     System.out.println("Ready at: " + file.getAbsolutePath());
 }).exceptionally(ex -> {
-    // Handle network errors or FFmpeg failures
     ex.printStackTrace();
     return null;
 });
@@ -34,35 +35,31 @@ mediaFuture.thenAccept(file -> {
 
 ---
 
-## 3. UI Integration (GuiVideo & GuiImage)
+## 3. OS-Level FFmpeg Discovery & Security
 
-You do not need to manually handle `CompletableFuture`s if you use the native multimedia components, which have built-in localized loading states.
-
-### GuiVideo
-`GuiVideo` acts as a self-contained asynchronous component. When you assign a URL via `setVideoUrl(url)`, it automatically requests the `MediaPipeline` to stream or download it, displaying localized loading progress inside the video component bounds.
-
-```java
-GuiVideo videoPlayer = (GuiVideo) new GuiVideo(0, 0, 0, 200).withPercentWidth(1.0f);
-videoPlayer.setVideoUrl("https://example.com/trailer.mp4");
-videoPlayer.play();
-```
-
-### GuiImage
-Similarly, `GuiImage` supports both local assets (`ResourceLocation`) and remote URLs via `setUrl(url)`:
-
-```java
-GuiImage banner = (GuiImage) new GuiImage(0, 0, 0, 100).withPercentWidth(1.0f);
-banner.setUrl("https://example.com/banner.png");
-```
+- **OS Binary Discovery (`MediaManager`):** Starting in `r1.0b6`, X4UI automatically locates `ffmpeg` installed on **Linux, macOS, and Windows 10/11** (`PATH` and standard OS locations) instead of downloading binaries into `.minecraft/`. If `ffmpeg` is unavailable, X4UI falls back to **JCodec** automatically.
+- **URL & Path Validation (`SecurityUtils`):** Remote downloads enforce HTTP/HTTPS, block local/private network addresses (SSRF protection), and prevent path traversal when writing cache files.
 
 ---
 
-## 4. What To Avoid (Anti-Patterns)
+## 4. Supported Media Formats
+
+### PC (Windows, Linux, macOS)
+- **Video:** MP4, MKV, WebM, AVI, FLV
+- **Audio:** MP3, AAC, OGG, WAV, FLAC
+
+### Android (PojavLauncher, FoldCraft)
+- **Video:** **MP4 with H.264 encoding ONLY** (*Baseline* or *Main* profile). Attempting to play WebM or MKV on Android will fail.
+- If your mod uses `GuiVideo`, include an `.mp4` (H.264) fallback for mobile players.
+
+---
+
+## 5. What To Avoid (Critical Anti-Patterns)
 
 > [!CAUTION]
-> **1. NEVER block the thread waiting for a CompletableFuture.**
+> **1. NEVER block the thread waiting for a `CompletableFuture`.**
 > Never call `future.join()` or `future.get()` inside `update()` or `render()`. Minecraft will freeze completely.
 
 > [!CAUTION]
 > **2. NEVER inject global Toasts from background managers.**
-> The `MediaPipeline` must never know about `GuiToastManager`. If you want to notify the user of a download completion, do it in the `.thenAccept()` callback within your *Screen* class.
+> `MediaPipeline` must never reference `GuiToastManager`. Handle user notifications in your *Screen* callback or rely on `GuiVideo`'s built-in status display.

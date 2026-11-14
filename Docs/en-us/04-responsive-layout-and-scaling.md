@@ -49,15 +49,26 @@ badge.withPercentPosition(0.5f, 0.1f);
 
 ---
 
-### Pillar 2: `FlexLayout` as the Core Layout Engine
+### Pillar 2: `FlexLayout`, Alignment (`FlexAlign`) & Fluent Primitives
 
-Whenever grouping multiple elements, use a container with `FlexLayout` instead of assigning `.withPercentPosition()` to every single element. The `FlexLayout` will intelligently stack and arrange components elastically.
+Whenever grouping multiple elements, use `GuiPanel` semantic builders instead of computing manual coordinates:
 
 ```java
-GuiPanel gridContainer = new GuiPanel(0, 0, 0, 0).withPercentWidth(1.0f);
-gridContainer.setFlexDirection(FlexDirection.VERTICAL);
-gridContainer.setGap(8); // Automatic spacing between items
+// Standard centered modal window (with automatic dimBackground in GuiBaseScreen)
+GuiPanel window = createCenteredWindow(420, 300);
+
+// Header row with title on the left and close button on the right
+GuiPanel header = GuiPanel.row(8);
+header.addChild(new GuiLabel(0, 0, "Control Panel", 0xFFFFFFFF));
+header.addChild(GuiPanel.spacer());
+header.addChild(new GuiButton(0, 0, 20, 20, "X", this::closeScreen));
+
+// Section card with theme, padding, and automatic height (hugContent)
+GuiPanel section = GuiPanel.card(10, 6);
 ```
+
+#### Alignment with `FlexAlign`:
+`FlexLayout` supports `FlexAlign.START`, `CENTER`, `END`, and `STRETCH` on both the cross axis (`setAlignItems`) and main axis (`setJustifyContent`), as well as `GuiPanel.spacer()` to push items to opposite ends.
 
 #### Parent Container Sizing Control (`hugContent`):
 Starting in `r1.0b5`, `FlexLayout` is **non-destructive** by default (`hugContent = false`): it respects the explicit or responsive percentage dimensions of the parent container (`withPercentWidth`/`withPercentHeight`).
@@ -95,9 +106,8 @@ In GUI Scale 1x and 2x, screen height is large and the `GuiScrollPanel` won't di
 The internal container of a `GuiScrollPanel` is exposed via `.getContentPanel()`. To ensure everything inside it grows responsively, apply the rule from Pillar 2:
 
 ```java
-GuiScrollPanel scrollPanel = (GuiScrollPanel) new GuiScrollPanel(0, 0, 0, 300).withPercentWidth(1.0f);
-scrollPanel.getContentPanel().setFlexDirection(FlexDirection.VERTICAL);
-scrollPanel.getContentPanel().withPercentWidth(1.0f); // Mandatory!
+// Ready-to-use responsive vertical scroll (contentPanel uses VERTICAL, hugContent=true, 100% width)
+GuiScrollPanel scrollPanel = GuiScrollPanel.vertical(180, 6);
 ```
 
 ---

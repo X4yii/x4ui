@@ -1,9 +1,5 @@
 package com.x4yi.x4ui.client.gui.input;
 
-/**
- * Backend-agnostic key code constants compatible with Forge (LWJGL 2) and CleanroomMC (LWJGL 3 / lwjgly).
- * Consumer mods should reference these constants instead of importing {@code org.lwjgl.input.Keyboard}.
- */
 public final class KeyCodes {
     public static final int ESCAPE = 1;
     public static final int BACKSPACE = 14;

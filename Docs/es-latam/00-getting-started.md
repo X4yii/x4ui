@@ -1,11 +1,11 @@
 # 00 - Primeros Pasos
 
-X4UI es un framework moderno de interfaz gráfica para Minecraft Forge 1.12.2. Proporciona una arquitectura completa basada en árbol de componentes retenidos, diseños flexbox responsivos, una capa gráfica inmediata abstracta (`IGraphics`), soporte nativo de fuentes vectoriales TrueType/OpenType (`IFont`), propagación jerárquica de eventos, enlace reactivo de estado (`State<T>`), animaciones fluidas y soporte de temas desacoplados.
+X4UI es un framework moderno de interfaz gráfica para **Minecraft Forge 1.12.2 (Java 8)** y **CleanroomMC (Java 25)**. Proporciona una arquitectura completa basada en árbol de componentes retenidos, diseños flexbox responsivos, una capa gráfica inmediata abstracta (`IGraphics`), soporte nativo de fuentes vectoriales TrueType/OpenType (`IFont`), propagación jerárquica de eventos, enlace reactivo de estado (`State<T>`), red flexible servidor–cliente (`UINetwork`), animaciones fluidas y soporte de temas desacoplados.
 
 ## Requisitos
 
-- Minecraft Forge 1.12.2 (`1.12.2-14.23.5.2847` o superior)
-- Java 8 (OpenJDK u Oracle JDK)
+- Minecraft Forge 1.12.2 (`1.12.2-14.23.5.2847` o superior) o CleanroomMC
+- Java 8 (para compilar mods consumidores y ejecutar Forge) o Java 25 (para ejecutar CleanroomMC)
 
 ## Instalación
 
@@ -18,7 +18,7 @@ repositories {
 }
 
 dependencies {
-    deobfCompile "maven.modrinth:x4ui:1.0b5"
+    deobfCompile "maven.modrinth:x4ui:r1.0b6"
 }
 ```
 
@@ -154,7 +154,7 @@ public class MyContainerScreen extends GuiBaseContainer {
 
 ## Métodos Fluent en `GuiComponent`
 
-En X4UI r1.0b5, los componentes cuentan con métodos fluidos encadenables directamente en su jerarquía base (`GuiComponent`):
+Los componentes cuentan con métodos fluidos encadenables directamente en su jerarquía base (`GuiComponent`):
 
 ```java
 GuiButton btn = new GuiButton(0, 0, 120, 20, "Aceptar", this::onConfirm)
@@ -179,24 +179,9 @@ GuiPanel panel = GuiBuilder.createPanel()
 
 ---
 
-## Qué Evitar Hacer (Antipatrones y Errores Críticos)
+## Siguientes Pasos
 
-> [!CAUTION]
-> **1. NUNCA importar clases de `client.gui` o `impl.client` en código del servidor o común.**
-> Toda la interfaz gráfica está marcada con `@SideOnly(Side.CLIENT)`. Usar estas clases en paquetes comunes causará `ClassNotFoundException` en servidores dedicados. Para código común use únicamente `com.x4yi.x4ui.common.State<T>`.
-
-> [!WARNING]
-> **2. NUNCA ejecutar llamadas directas a OpenGL (`GL11`, `GlStateManager`, `Tessellator`).**
-> Utilice siempre los métodos de `IGraphics`. Mezclar llamadas crudas de OpenGL con el renderizador de X4UI romperá el estado interno (matrices, recortes, etc).
-
-> [!WARNING]
-> **3. NUNCA hardcodear dimensiones mayores a 320 px de ancho sin prever el GUI Scale 4.**
-> Coloque siempre contenidos largos dentro de un `GuiScrollPanel` y use dimensiones porcentuales (`withPercentWidth`) para soportar resoluciones pequeñas.
-
-> [!IMPORTANT]
-> **4. NUNCA crear instancias nuevas de `TrueTypeFont` repetidamente o en cada fotograma.**
-> Registre las fuentes una única vez en `FontRegistry` al cargar el juego. Hacerlo durante el renderizado colapsará el rendimiento.
-
-> [!IMPORTANT]
-> **5. NUNCA olvidar desvincular escuchadores manuales de `State<T>`.**
-> Utilice siempre `component.bindState(state, callback)` en lugar de `state.addListener()`. Esto asegura que el escuchador se desvincule automáticamente cuando el componente sea destruido.
+- Revisa **Conceptos Fundamentales (`01`)** para ciclo de vida, `State<T>` y `UIStateBus`.
+- Revisa **Redes y Sincronización (`03`)** para pantallas remotas, RPC y `Container` sync.
+- Revisa **Diseño Responsivo (`04`)** para `FlexLayout`, `FlexAlign` y `GuiScrollPanel`.
+- Revisa **Compatibilidad Forge ↔ CleanroomMC (`09`)** para reglas de portabilidad (`IGraphics`, `KeyCodes`, `UIInput`, `PlatformBridge`).

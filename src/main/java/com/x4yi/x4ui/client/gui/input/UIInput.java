@@ -7,9 +7,6 @@ import net.minecraftforge.fml.relauncher.SideOnly;
 import org.lwjgl.input.Keyboard;
 import org.lwjgl.input.Mouse;
 
-/**
- * Input abstraction isolating LWJGL 2 / LWJGL 3 (lwjgly) differences for screens, overlays, and consumer mods.
- */
 @SideOnly(Side.CLIENT)
 public final class UIInput {
     private UIInput() {}
@@ -26,10 +23,6 @@ public final class UIInput {
         return GuiScreen.isAltKeyDown();
     }
 
-    /**
-     * Normalizes mouse wheel deltas across LWJGL 2 (+/-120 per notch) and LWJGL 3/GLFW trackpads (smaller deltas).
-     * Returns 0 when idle, or signed notch steps (+/-1 or more).
-     */
     public static int normalizeWheelDelta(int rawWheel) {
         if (rawWheel == 0) {
             return 0;
@@ -45,9 +38,6 @@ public final class UIInput {
         return normalizeWheelDelta(Mouse.getEventDWheel());
     }
 
-    /**
-     * Computes scaled GUI mouse X safely, guarding against {@code displayWidth == 0} when minimized in LWJGL 3.
-     */
     public static int safeMouseX(Minecraft mc, int guiWidth) {
         if (mc == null || mc.displayWidth <= 0) {
             return 0;
@@ -55,9 +45,6 @@ public final class UIInput {
         return Mouse.getEventX() * guiWidth / mc.displayWidth;
     }
 
-    /**
-     * Computes scaled GUI mouse Y safely, guarding against {@code displayHeight == 0} when minimized in LWJGL 3.
-     */
     public static int safeMouseY(Minecraft mc, int guiHeight) {
         if (mc == null || mc.displayHeight <= 0) {
             return 0;

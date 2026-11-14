@@ -34,19 +34,11 @@ public class MediaManager {
         resolveFFmpegExecutable();
     }
 
-    /**
-     * Resolves the {@code ffmpeg} executable from:
-     * 1. Explicit {@code -Dx4ui.ffmpeg.path} property or {@code X4UI_FFMPEG} env var
-     * 2. System {@code PATH}
-     * 3. Standard OS install paths (Linux, macOS, Windows 10/11)
-     * 4. Instance fallback ({@code <minecraft>/x4ui/bin/ffmpeg(.exe)})
-     */
     public static synchronized File resolveFFmpegExecutable() {
         String os = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
         boolean isWindows = os.contains("win");
         String exeName = isWindows ? "ffmpeg.exe" : "ffmpeg";
 
-        // 1. Explicit override
         String propOverride = System.getProperty("x4ui.ffmpeg.path");
         if (propOverride != null && !propOverride.trim().isEmpty()) {
             File f = new File(propOverride.trim());
@@ -66,7 +58,6 @@ public class MediaManager {
             }
         }
 
-        // 2. System PATH
         String pathEnv = System.getenv("PATH");
         if (pathEnv != null && !pathEnv.isEmpty()) {
             String[] dirs = pathEnv.split(File.pathSeparator);
@@ -81,7 +72,6 @@ public class MediaManager {
             }
         }
 
-        // 3. Common OS-specific installation paths
         for (File candidate : getOsCandidatePaths(os, exeName)) {
             if (isValidExecutable(candidate)) {
                 ffmpegExecutable = candidate;
@@ -90,7 +80,6 @@ public class MediaManager {
             }
         }
 
-        // 4. Instance fallback
         if (binDir != null) {
             File fallback = new File(binDir, exeName);
             if (isValidExecutable(fallback)) {

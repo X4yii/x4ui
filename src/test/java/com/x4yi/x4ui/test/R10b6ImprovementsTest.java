@@ -228,11 +228,9 @@ public class R10b6ImprovementsTest {
         Assert.assertEquals(1, com.x4yi.x4ui.client.gui.input.UIInput.normalizeWheelDelta(120));
         Assert.assertEquals(-1, com.x4yi.x4ui.client.gui.input.UIInput.normalizeWheelDelta(-120));
         Assert.assertEquals(2, com.x4yi.x4ui.client.gui.input.UIInput.normalizeWheelDelta(240));
-        // LWJGL 3 / GLFW trackpad small deltas
         Assert.assertEquals(1, com.x4yi.x4ui.client.gui.input.UIInput.normalizeWheelDelta(15));
         Assert.assertEquals(-1, com.x4yi.x4ui.client.gui.input.UIInput.normalizeWheelDelta(-15));
 
-        // Guard against displayWidth / displayHeight == 0 when minimized
         Assert.assertEquals(0, com.x4yi.x4ui.client.gui.input.UIInput.safeMouseX(null, 400));
         Assert.assertEquals(0, com.x4yi.x4ui.client.gui.input.UIInput.safeMouseY(null, 300));
         Assert.assertEquals(28, com.x4yi.x4ui.client.gui.input.KeyCodes.ENTER);
