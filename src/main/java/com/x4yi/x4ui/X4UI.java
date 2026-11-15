@@ -4,17 +4,26 @@ import net.minecraftforge.fml.common.event.FMLInitializationEvent;
 import net.minecraftforge.fml.common.event.FMLPostInitializationEvent;
 import net.minecraftforge.fml.common.event.FMLPreInitializationEvent;
 import net.minecraftforge.fml.common.event.FMLLoadCompleteEvent;
+import net.minecraftforge.fml.common.event.FMLServerStoppedEvent;
 import net.minecraftforge.fml.common.SidedProxy;
+import com.x4yi.x4ui.common.network.ClientSessionTracker;
+import com.x4yi.x4ui.common.network.UIChannels;
+import com.x4yi.x4ui.common.network.UINetwork;
 import com.x4yi.x4ui.proxy.CommonProxy;
 import org.apache.logging.log4j.Logger;
 import net.minecraftforge.fml.common.network.NetworkCheckHandler;
 import net.minecraftforge.fml.relauncher.Side;
 import java.util.Map;
-@Mod(modid = X4UI.MODID, name = X4UI.NAME, version = X4UI.VERSION, acceptableRemoteVersions = "*")
+@Mod(modid = X4UI.MODID, name = X4UI.NAME, version = X4UI.VERSION)
 public class X4UI {
     public static final String MODID = "x4ui";
     public static final String NAME = "X4UI";
-    public static final String VERSION = "r1.0b6";
+    public static final String VERSION = "r1.0b7";
+    /**
+     * Asymmetric network compatibility policy:
+     * - Client with X4UI connecting to a vanilla server (side == SERVER): allowed.
+     * - Server with X4UI receiving a client connection (side == CLIENT): X4UI is required on the client.
+     */
     @NetworkCheckHandler
     public boolean checkRemoteVersions(Map<String, String> remoteVersions, Side side) {
         if (side == Side.SERVER) {
@@ -52,7 +61,10 @@ public class X4UI {
     public void loadComplete(FMLLoadCompleteEvent event) {
         proxy.loadComplete(event);
     }
-    public static com.x4yi.x4ui.api.client.media.IMediaService getMediaService() {
-        return proxy.getMediaService();
+    @Mod.EventHandler
+    public void serverStopped(FMLServerStoppedEvent event) {
+        UIChannels.clearAll();
+        ClientSessionTracker.clearAll();
+        UINetwork.clearAllRateLimits();
     }
 }

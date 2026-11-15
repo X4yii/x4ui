@@ -6,7 +6,7 @@ plugins {
     id 'com.gradleup.shadow' version '8.3.5'
 }
 
-version = 'r1.0b6'
+version = 'r1.0b7'
 group = 'com.x4yi.x4ui'
 base {
     archivesName = 'x4ui'
@@ -142,6 +142,9 @@ publishing {
     publications {
         mavenJava(MavenPublication) {
             artifact tasks.named('reobfJar')
+            artifact(tasks.named('shadowJar')) {
+                classifier = 'dev'
+            }
         }
     }
 }

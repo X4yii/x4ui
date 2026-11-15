@@ -29,8 +29,6 @@ LICENSE.txt
 LICENSE-Paulscode*.txt
 scratch_*.sh
 docs/
-
-d.md
-INDEX.md
-README_CurseForge.md
-README_Modrinth.md
+src/test/
+*.md
+!README.md
