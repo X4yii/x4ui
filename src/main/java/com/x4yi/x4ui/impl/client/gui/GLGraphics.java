@@ -1,6 +1,8 @@
 package com.x4yi.x4ui.impl.client.gui;
 import com.x4yi.x4ui.api.client.font.IFont;
 import com.x4yi.x4ui.api.client.gui.IGraphics;
+import com.x4yi.x4ui.client.gui.utils.BorderSides;
+import com.x4yi.x4ui.client.gui.utils.CornerRadii;
 import com.x4yi.x4ui.client.gui.utils.Insets;
 import com.x4yi.x4ui.impl.client.font.VanillaFont;
 import net.minecraft.client.Minecraft;
@@ -207,12 +209,17 @@ public class GLGraphics implements IGraphics {
     }
     @Override
     public void drawRoundedRect(int x, int y, int width, int height, int radius, int argb) {
+        drawRoundedRect(x, y, width, height, CornerRadii.all(radius), argb);
+    }
+
+    @Override
+    public void drawRoundedRect(int x, int y, int width, int height, CornerRadii radii, int argb) {
         if (width <= 0 || height <= 0) return;
-        if (radius <= 0) {
+        if (radii == null || radii.isZero()) {
             drawRect(x, y, width, height, argb);
             return;
         }
-        radius = Math.min(radius, Math.min(width, height) / 2);
+        CornerRadii r = radii.clamp(width, height);
         argb = applyTintAndAlpha(argb);
         float a = ((argb >> 24) & 0xFF) / 255.0f;
         float red = ((argb >> 16) & 0xFF) / 255.0f;
@@ -226,47 +233,188 @@ public class GLGraphics implements IGraphics {
         GlStateManager.color(red, green, blue, a);
         buffer.begin(GL11.GL_TRIANGLE_FAN, DefaultVertexFormats.POSITION);
         buffer.pos(x + width / 2.0, y + height / 2.0, 0.0D).endVertex();
-        int cxTL = x + radius;
-        int cyTL = y + radius;
-        for (int i = 24; i >= 16; i--) {
-            buffer.pos(cxTL + COS_TABLE[i] * radius, cyTL + SIN_TABLE[i] * radius, 0.0D).endVertex();
+
+        if (r.topLeft > 0) {
+            int cxTL = x + r.topLeft;
+            int cyTL = y + r.topLeft;
+            for (int i = 24; i >= 16; i--) {
+                buffer.pos(cxTL + COS_TABLE[i] * r.topLeft, cyTL + SIN_TABLE[i] * r.topLeft, 0.0D).endVertex();
+            }
+        } else {
+            buffer.pos(x, y, 0.0D).endVertex();
         }
-        int cxBL = x + radius;
-        int cyBL = y + height - radius;
-        for (int i = 16; i >= 8; i--) {
-            buffer.pos(cxBL + COS_TABLE[i] * radius, cyBL + SIN_TABLE[i] * radius, 0.0D).endVertex();
+
+        if (r.bottomLeft > 0) {
+            int cxBL = x + r.bottomLeft;
+            int cyBL = y + height - r.bottomLeft;
+            for (int i = 16; i >= 8; i--) {
+                buffer.pos(cxBL + COS_TABLE[i] * r.bottomLeft, cyBL + SIN_TABLE[i] * r.bottomLeft, 0.0D).endVertex();
+            }
+        } else {
+            buffer.pos(x, y + height, 0.0D).endVertex();
         }
-        int cxBR = x + width - radius;
-        int cyBR = y + height - radius;
-        for (int i = 8; i >= 0; i--) {
-            buffer.pos(cxBR + COS_TABLE[i] * radius, cyBR + SIN_TABLE[i] * radius, 0.0D).endVertex();
+
+        if (r.bottomRight > 0) {
+            int cxBR = x + width - r.bottomRight;
+            int cyBR = y + height - r.bottomRight;
+            for (int i = 8; i >= 0; i--) {
+                buffer.pos(cxBR + COS_TABLE[i] * r.bottomRight, cyBR + SIN_TABLE[i] * r.bottomRight, 0.0D).endVertex();
+            }
+        } else {
+            buffer.pos(x + width, y + height, 0.0D).endVertex();
         }
-        int cxTR = x + width - radius;
-        int cyTR = y + radius;
-        for (int i = 32; i >= 24; i--) {
-            buffer.pos(cxTR + COS_TABLE[i] * radius, cyTR + SIN_TABLE[i] * radius, 0.0D).endVertex();
+
+        if (r.topRight > 0) {
+            int cxTR = x + width - r.topRight;
+            int cyTR = y + r.topRight;
+            for (int i = 32; i >= 24; i--) {
+                buffer.pos(cxTR + COS_TABLE[i] * r.topRight, cyTR + SIN_TABLE[i] * r.topRight, 0.0D).endVertex();
+            }
+        } else {
+            buffer.pos(x + width, y, 0.0D).endVertex();
         }
-        buffer.pos(cxTL + COS_TABLE[24] * radius, cyTL + SIN_TABLE[24] * radius, 0.0D).endVertex();
+
+        if (r.topLeft > 0) {
+            buffer.pos(x + r.topLeft + COS_TABLE[24] * r.topLeft, y + r.topLeft + SIN_TABLE[24] * r.topLeft, 0.0D).endVertex();
+        } else {
+            buffer.pos(x, y, 0.0D).endVertex();
+        }
         tessellator.draw();
         GlStateManager.enableTexture2D();
     }
+
     @Override
     public void drawBorder(int x, int y, int width, int height, int borderWidth, int argb) {
-        if (borderWidth <= 0 || width <= 0 || height <= 0) return;
-        drawRect(x, y, width, borderWidth, argb);
-        drawRect(x, y + height - borderWidth, width, borderWidth, argb);
-        drawRect(x, y + borderWidth, borderWidth, height - borderWidth * 2, argb);
-        drawRect(x + width - borderWidth, y + borderWidth, borderWidth, height - borderWidth * 2, argb);
+        drawBorder(x, y, width, height, borderWidth, BorderSides.ALL, argb);
     }
+
+    @Override
+    public void drawBorder(int x, int y, int width, int height, int borderWidth, int borderSides, int argb) {
+        if (borderWidth <= 0 || width <= 0 || height <= 0 || (borderSides & BorderSides.ALL) == 0) return;
+        int bw = Math.min(borderWidth, Math.min(width, height));
+        boolean hasTop = BorderSides.has(borderSides, BorderSides.TOP);
+        boolean hasBottom = BorderSides.has(borderSides, BorderSides.BOTTOM);
+        if (hasTop) {
+            drawRect(x, y, width, bw, argb);
+        }
+        if (hasBottom) {
+            drawRect(x, y + height - bw, width, bw, argb);
+        }
+        int vertY = y + (hasTop ? bw : 0);
+        int vertH = height - (hasTop ? bw : 0) - (hasBottom ? bw : 0);
+        if (vertH > 0) {
+            if (BorderSides.has(borderSides, BorderSides.LEFT)) {
+                drawRect(x, vertY, bw, vertH, argb);
+            }
+            if (BorderSides.has(borderSides, BorderSides.RIGHT)) {
+                drawRect(x + width - bw, vertY, bw, vertH, argb);
+            }
+        }
+    }
+
     @Override
     public void drawRoundedBorder(int x, int y, int width, int height, int radius, int borderWidth, int argb) {
-        if (width <= 0 || height <= 0 || borderWidth <= 0) return;
-        if (radius <= 0) {
-            drawBorder(x, y, width, height, borderWidth, argb);
+        drawRoundedBorder(x, y, width, height, CornerRadii.all(radius), borderWidth, BorderSides.ALL, argb);
+    }
+
+    @Override
+    public void drawRoundedBorder(int x, int y, int width, int height, CornerRadii radii, int borderWidth, int borderSides, int argb) {
+        if (width <= 0 || height <= 0 || borderWidth <= 0 || (borderSides & BorderSides.ALL) == 0) return;
+        if (radii == null || radii.isZero()) {
+            drawBorder(x, y, width, height, borderWidth, borderSides, argb);
             return;
         }
-        radius = Math.min(radius, Math.min(width, height) / 2);
-        borderWidth = Math.min(borderWidth, radius);
+        CornerRadii r = radii.clamp(width, height);
+        boolean hasTop = BorderSides.has(borderSides, BorderSides.TOP);
+        boolean hasRight = BorderSides.has(borderSides, BorderSides.RIGHT);
+        boolean hasBottom = BorderSides.has(borderSides, BorderSides.BOTTOM);
+        boolean hasLeft = BorderSides.has(borderSides, BorderSides.LEFT);
+
+        int effTL = (hasTop && hasLeft) ? r.topLeft : 0;
+        int effTR = (hasTop && hasRight) ? r.topRight : 0;
+        int effBR = (hasBottom && hasRight) ? r.bottomRight : 0;
+        int effBL = (hasBottom && hasLeft) ? r.bottomLeft : 0;
+
+        if (effTL == 0 && effTR == 0 && effBR == 0 && effBL == 0) {
+            drawBorder(x, y, width, height, borderWidth, borderSides, argb);
+            return;
+        }
+
+        if (borderSides == BorderSides.ALL && effTL == effTR && effTR == effBR && effBR == effBL) {
+            int radius = effTL;
+            int bw = Math.min(borderWidth, radius);
+            argb = applyTintAndAlpha(argb);
+            float a = ((argb >> 24) & 0xFF) / 255.0f;
+            float red = ((argb >> 16) & 0xFF) / 255.0f;
+            float green = ((argb >> 8) & 0xFF) / 255.0f;
+            float blue = (argb & 0xFF) / 255.0f;
+            Tessellator tessellator = Tessellator.getInstance();
+            BufferBuilder buffer = tessellator.getBuffer();
+            GlStateManager.enableBlend();
+            GlStateManager.disableTexture2D();
+            GlStateManager.tryBlendFuncSeparate(GlStateManager.SourceFactor.SRC_ALPHA, GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA, GlStateManager.SourceFactor.ONE, GlStateManager.DestFactor.ZERO);
+            GlStateManager.color(red, green, blue, a);
+            buffer.begin(GL11.GL_QUAD_STRIP, DefaultVertexFormats.POSITION);
+            int innerR = Math.max(0, radius - bw);
+            int cxTL = x + radius, cyTL = y + radius;
+            for (int i = 24; i >= 16; i--) {
+                buffer.pos(cxTL + COS_TABLE[i] * innerR, cyTL + SIN_TABLE[i] * innerR, 0.0D).endVertex();
+                buffer.pos(cxTL + COS_TABLE[i] * radius, cyTL + SIN_TABLE[i] * radius, 0.0D).endVertex();
+            }
+            int cxBL = x + radius, cyBL = y + height - radius;
+            for (int i = 16; i >= 8; i--) {
+                buffer.pos(cxBL + COS_TABLE[i] * innerR, cyBL + SIN_TABLE[i] * innerR, 0.0D).endVertex();
+                buffer.pos(cxBL + COS_TABLE[i] * radius, cyBL + SIN_TABLE[i] * radius, 0.0D).endVertex();
+            }
+            int cxBR = x + width - radius, cyBR = y + height - radius;
+            for (int i = 8; i >= 0; i--) {
+                buffer.pos(cxBR + COS_TABLE[i] * innerR, cyBR + SIN_TABLE[i] * innerR, 0.0D).endVertex();
+                buffer.pos(cxBR + COS_TABLE[i] * radius, cyBR + SIN_TABLE[i] * radius, 0.0D).endVertex();
+            }
+            int cxTR = x + width - radius, cyTR = y + radius;
+            for (int i = 32; i >= 24; i--) {
+                buffer.pos(cxTR + COS_TABLE[i] * innerR, cyTR + SIN_TABLE[i] * innerR, 0.0D).endVertex();
+                buffer.pos(cxTR + COS_TABLE[i] * radius, cyTR + SIN_TABLE[i] * radius, 0.0D).endVertex();
+            }
+            buffer.pos(cxTL + COS_TABLE[24] * innerR, cyTL + SIN_TABLE[24] * innerR, 0.0D).endVertex();
+            buffer.pos(cxTL + COS_TABLE[24] * radius, cyTL + SIN_TABLE[24] * radius, 0.0D).endVertex();
+            tessellator.draw();
+            GlStateManager.enableTexture2D();
+            return;
+        }
+
+        // General per-side + per-corner rounded border rendering
+        int bw = borderWidth;
+        if (hasTop) {
+            int xStart = x + (effTL > 0 ? effTL : 0);
+            int xEnd = x + width - (effTR > 0 ? effTR : 0);
+            if (xEnd > xStart) drawRect(xStart, y, xEnd - xStart, bw, argb);
+        }
+        if (hasBottom) {
+            int xStart = x + (effBL > 0 ? effBL : 0);
+            int xEnd = x + width - (effBR > 0 ? effBR : 0);
+            if (xEnd > xStart) drawRect(xStart, y + height - bw, xEnd - xStart, bw, argb);
+        }
+        if (hasLeft) {
+            int yStart = y + (effTL > 0 ? effTL : (hasTop ? bw : 0));
+            int yEnd = y + height - (effBL > 0 ? effBL : (hasBottom ? bw : 0));
+            if (yEnd > yStart) drawRect(x, yStart, bw, yEnd - yStart, argb);
+        }
+        if (hasRight) {
+            int yStart = y + (effTR > 0 ? effTR : (hasTop ? bw : 0));
+            int yEnd = y + height - (effBR > 0 ? effBR : (hasBottom ? bw : 0));
+            if (yEnd > yStart) drawRect(x + width - bw, yStart, bw, yEnd - yStart, argb);
+        }
+
+        if (effTL > 0) drawCornerArc(x + effTL, y + effTL, effTL, bw, 24, 16, argb);
+        if (effBL > 0) drawCornerArc(x + effBL, y + height - effBL, effBL, bw, 16, 8, argb);
+        if (effBR > 0) drawCornerArc(x + width - effBR, y + height - effBR, effBR, bw, 8, 0, argb);
+        if (effTR > 0) drawCornerArc(x + width - effTR, y + effTR, effTR, bw, 32, 24, argb);
+    }
+
+    private void drawCornerArc(int cx, int cy, int radius, int borderWidth, int startIdx, int endIdx, int argb) {
+        int bw = Math.min(borderWidth, radius);
+        int innerR = Math.max(0, radius - bw);
         argb = applyTintAndAlpha(argb);
         float a = ((argb >> 24) & 0xFF) / 255.0f;
         float red = ((argb >> 16) & 0xFF) / 255.0f;
@@ -279,33 +427,10 @@ public class GLGraphics implements IGraphics {
         GlStateManager.tryBlendFuncSeparate(GlStateManager.SourceFactor.SRC_ALPHA, GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA, GlStateManager.SourceFactor.ONE, GlStateManager.DestFactor.ZERO);
         GlStateManager.color(red, green, blue, a);
         buffer.begin(GL11.GL_QUAD_STRIP, DefaultVertexFormats.POSITION);
-        int innerR = Math.max(0, radius - borderWidth);
-        int cxTL = x + radius;
-        int cyTL = y + radius;
-        for (int i = 24; i >= 16; i--) {
-            buffer.pos(cxTL + COS_TABLE[i] * innerR, cyTL + SIN_TABLE[i] * innerR, 0.0D).endVertex();
-            buffer.pos(cxTL + COS_TABLE[i] * radius, cyTL + SIN_TABLE[i] * radius, 0.0D).endVertex();
+        for (int i = startIdx; i >= endIdx; i--) {
+            buffer.pos(cx + COS_TABLE[i] * innerR, cy + SIN_TABLE[i] * innerR, 0.0D).endVertex();
+            buffer.pos(cx + COS_TABLE[i] * radius, cy + SIN_TABLE[i] * radius, 0.0D).endVertex();
         }
-        int cxBL = x + radius;
-        int cyBL = y + height - radius;
-        for (int i = 16; i >= 8; i--) {
-            buffer.pos(cxBL + COS_TABLE[i] * innerR, cyBL + SIN_TABLE[i] * innerR, 0.0D).endVertex();
-            buffer.pos(cxBL + COS_TABLE[i] * radius, cyBL + SIN_TABLE[i] * radius, 0.0D).endVertex();
-        }
-        int cxBR = x + width - radius;
-        int cyBR = y + height - radius;
-        for (int i = 8; i >= 0; i--) {
-            buffer.pos(cxBR + COS_TABLE[i] * innerR, cyBR + SIN_TABLE[i] * innerR, 0.0D).endVertex();
-            buffer.pos(cxBR + COS_TABLE[i] * radius, cyBR + SIN_TABLE[i] * radius, 0.0D).endVertex();
-        }
-        int cxTR = x + width - radius;
-        int cyTR = y + radius;
-        for (int i = 32; i >= 24; i--) {
-            buffer.pos(cxTR + COS_TABLE[i] * innerR, cyTR + SIN_TABLE[i] * innerR, 0.0D).endVertex();
-            buffer.pos(cxTR + COS_TABLE[i] * radius, cyTR + SIN_TABLE[i] * radius, 0.0D).endVertex();
-        }
-        buffer.pos(cxTL + COS_TABLE[24] * innerR, cyTL + SIN_TABLE[24] * innerR, 0.0D).endVertex();
-        buffer.pos(cxTL + COS_TABLE[24] * radius, cyTL + SIN_TABLE[24] * radius, 0.0D).endVertex();
         tessellator.draw();
         GlStateManager.enableTexture2D();
     }

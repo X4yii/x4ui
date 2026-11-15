@@ -1,4 +1,5 @@
 package com.x4yi.x4ui.api.client.gui;
+import com.x4yi.x4ui.client.gui.utils.CornerRadii;
 import com.x4yi.x4ui.client.gui.utils.Insets;
 import net.minecraft.client.Minecraft;
 import net.minecraft.item.ItemStack;
@@ -26,8 +27,11 @@ public interface IGraphics {
     void resetColor();
     void drawRect(int x, int y, int width, int height, int argb);
     void drawRoundedRect(int x, int y, int width, int height, int radius, int argb);
+    void drawRoundedRect(int x, int y, int width, int height, CornerRadii radii, int argb);
     void drawBorder(int x, int y, int width, int height, int borderWidth, int argb);
+    void drawBorder(int x, int y, int width, int height, int borderWidth, int borderSides, int argb);
     void drawRoundedBorder(int x, int y, int width, int height, int radius, int borderWidth, int argb);
+    void drawRoundedBorder(int x, int y, int width, int height, CornerRadii radii, int borderWidth, int borderSides, int argb);
     void drawLine(float x1, float y1, float x2, float y2, float thickness, int argb);
     void drawCircle(float centerX, float centerY, float radius, int argb);
     void drawGradient(int x, int y, int width, int height, int colorTop, int colorBottom);
