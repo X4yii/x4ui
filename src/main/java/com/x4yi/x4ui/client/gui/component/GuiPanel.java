@@ -4,6 +4,8 @@ import com.x4yi.x4ui.api.client.gui.IGraphics;
 import com.x4yi.x4ui.client.gui.component.layout.FlexAlign;
 import com.x4yi.x4ui.client.gui.component.layout.FlexDirection;
 import com.x4yi.x4ui.client.gui.component.layout.FlexLayout;
+import com.x4yi.x4ui.client.gui.utils.BorderSides;
+import com.x4yi.x4ui.client.gui.utils.CornerRadii;
 import com.x4yi.x4ui.client.gui.utils.ITheme;
 import com.x4yi.x4ui.client.gui.utils.Insets;
 
@@ -11,9 +13,11 @@ public class GuiPanel extends GuiComponent {
     protected int backgroundColor = 0x00000000;
     protected int borderColor = 0x00000000;
     protected int borderWidth = 0;
-    protected int cornerRadius = 0;
+    protected int borderSides = BorderSides.ALL;
+    protected CornerRadii cornerRadii = CornerRadii.ZERO;
     protected boolean flexSpacer = false;
     protected boolean themedCard = false;
+    protected boolean suppressChrome = false;
     private boolean customBackgroundSet = false;
     private boolean customBorderSet = false;
 
@@ -54,6 +58,7 @@ public class GuiPanel extends GuiComponent {
     public static GuiPanel spacer() {
         GuiPanel spacer = new GuiPanel(0, 0, 0, 0);
         spacer.flexSpacer = true;
+        spacer.setFlexGrow(1.0f);
         return spacer;
     }
 
@@ -195,7 +200,7 @@ public class GuiPanel extends GuiComponent {
     }
 
     public void setCornerRadius(int cornerRadius) {
-        this.cornerRadius = cornerRadius;
+        this.cornerRadii = CornerRadii.all(cornerRadius);
     }
 
     public GuiPanel withCornerRadius(int cornerRadius) {
@@ -204,7 +209,38 @@ public class GuiPanel extends GuiComponent {
     }
 
     public int getCornerRadius() {
-        return this.cornerRadius;
+        return this.cornerRadii.topLeft;
+    }
+
+    public void setCornerRadii(CornerRadii cornerRadii) {
+        this.cornerRadii = cornerRadii != null ? cornerRadii : CornerRadii.ZERO;
+    }
+
+    public GuiPanel withCornerRadii(CornerRadii cornerRadii) {
+        setCornerRadii(cornerRadii);
+        return this;
+    }
+
+    public GuiPanel withCornerRadii(int tl, int tr, int br, int bl) {
+        setCornerRadii(CornerRadii.of(tl, tr, br, bl));
+        return this;
+    }
+
+    public CornerRadii getCornerRadii() {
+        return this.cornerRadii;
+    }
+
+    public void setBorderSides(int borderSides) {
+        this.borderSides = borderSides;
+    }
+
+    public GuiPanel withBorderSides(int borderSides) {
+        setBorderSides(borderSides);
+        return this;
+    }
+
+    public int getBorderSides() {
+        return this.borderSides;
     }
 
     public GuiPanel withPadding(int padding) {
@@ -235,25 +271,34 @@ public class GuiPanel extends GuiComponent {
         return this;
     }
 
+    public void setSuppressChrome(boolean suppressChrome) {
+        this.suppressChrome = suppressChrome;
+    }
+
+    public boolean isSuppressChrome() {
+        return suppressChrome;
+    }
+
     @Override
     protected void renderSelf(IGraphics gfx, int mouseX, int mouseY, float partialTicks) {
+        if (suppressChrome) return;
         if (themedCard && !customBackgroundSet && !customBorderSet) {
             applyCardTheme(getTheme());
         }
         int absX = getAbsoluteX();
         int absY = getAbsoluteY();
         if ((backgroundColor & 0xFF000000) != 0) {
-            if (cornerRadius > 0) {
-                gfx.drawRoundedRect(absX, absY, width, height, cornerRadius, backgroundColor);
+            if (!cornerRadii.isZero()) {
+                gfx.drawRoundedRect(absX, absY, width, height, cornerRadii, backgroundColor);
             } else {
                 gfx.drawRect(absX, absY, width, height, backgroundColor);
             }
         }
-        if (borderWidth > 0 && (borderColor & 0xFF000000) != 0) {
-            if (cornerRadius > 0) {
-                gfx.drawRoundedBorder(absX, absY, width, height, cornerRadius, borderWidth, borderColor);
+        if (borderWidth > 0 && (borderSides & BorderSides.ALL) != 0 && (borderColor & 0xFF000000) != 0) {
+            if (!cornerRadii.isZero()) {
+                gfx.drawRoundedBorder(absX, absY, width, height, cornerRadii, borderWidth, borderSides, borderColor);
             } else {
-                gfx.drawBorder(absX, absY, width, height, borderWidth, borderColor);
+                gfx.drawBorder(absX, absY, width, height, borderWidth, borderSides, borderColor);
             }
         }
     }

@@ -56,6 +56,9 @@ public class DefaultTheme implements ITheme {
         if (x + tooltipWidth > screenWidth) {
             x -= 28 + tooltipWidth;
         }
+        if (x < 2) {
+            x = 2;
+        }
         if (y + tooltipHeight + 6 > screenHeight) {
             y = screenHeight - tooltipHeight - 6;
         }
@@ -81,6 +84,9 @@ public class DefaultTheme implements ITheme {
         int y = mouseY - 12;
         if (x + tooltipWidth > screenWidth) {
             x -= 28 + tooltipWidth;
+        }
+        if (x < 2) {
+            x = 2;
         }
         if (y + tooltipHeight + 6 > screenHeight) {
             y = screenHeight - tooltipHeight - 6;
