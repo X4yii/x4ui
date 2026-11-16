@@ -1,6 +1,6 @@
 <div align="center">
   <h1>X4UI Framework</h1>
-  <p><b>A modern, high-performance GUI framework for Minecraft Forge 1.12.2.</b></p>
+  <p><b>Retained-mode UI, reactive state, and server–client framework for Minecraft Forge 1.12.2 &amp; CleanroomMC.</b></p>
   <p>
     <a href="#-english">English</a> &bull; <a href="#-espanol">Espa&ntilde;ol</a>
   </p>
@@ -10,100 +10,110 @@
 
 <h2 id="-english">English</h2>
 
-### What is X4UI?
+### What X4UI Solves
 
-X4UI is a retained-mode GUI framework for Minecraft Forge 1.12.2. It replaces vanilla's immediate-mode `GuiScreen` rendering with a component tree architecture, flexbox layouts, event bubbling, reactive state binding, and theme support.
+Vanilla `GuiScreen` and `GuiContainer` rely on immediate-mode drawing inside `drawScreen()`, manual pixel coordinates, raw OpenGL state mutation, and tight coupling between rendering and game logic. Interfaces built directly on vanilla primitives break under `GUI Scale` 3–4, leak listeners or native resources, and fail across **Forge 1.12.2 (Java 8 + LWJGL 2)** and **CleanroomMC (Java 25 + LWJGL 3)**.
 
-### When to Use X4UI
+X4UI (`r1.0b6`) replaces ad-hoc GUI code with a deterministic, retained-mode UI framework engineered around strict runtime portability, reactive state management, and decoupled server–client communication.
 
-- **Interactive guidebooks or manuals**: `GuiMarkdown` renders formatted text with headings, bold, italic, code, links, blockquotes, bullet lists, images, and separators.
-- **RPG skill trees and complex menus**: Nested panels, buttons, toggles, sliders, and dropdowns with automatic flexbox layout.
-- **Media-rich interfaces**: Embed MP4 video playback (`GuiVideo`), static images from URLs (`GuiImage`), and 9-slice scalable backgrounds (`GuiSprite`).
-- **Custom inventory screens**: Wrap Minecraft containers with `GuiBaseContainer` and `GuiSlot` for flex-layout inventory grids.
+### Core Paradigm & Design Decisions
 
-### Key Features
+- **Retained-Mode Component Tree:** Every UI is a hierarchy of `GuiComponent` nodes rooted in `rootPanel`. Layout and render-order sorting execute lazily via dirty flags (`requestLayout()`, `requestRender()`), rather than recalculating geometry on every frame.
+- **API / Implementation Isolation:** Public interfaces (`IGraphics`, `IFont`, `IMediaService`) live in `com.x4yi.x4ui.api.*`, while OpenGL, TrueType rasterization, and FFmpeg/JCodec backends reside in `com.x4yi.x4ui.impl.*`.
+- **Dual-Runtime Abstraction (`PlatformBridge`):** Packaged as a **Multi-Release JAR** (`Java 8` base + `META-INF/versions/21/`) so `Cleaner`, I/O executors, `KeyCodes`, `UIInput`, and `IGraphics` run transparently on both Forge 1.12.2 (Java 8) and CleanroomMC (Java 25).
+- **Reactive State with Lifecycle Cleanup:** `State<T>` and `UIStateBus` (`Scope.SCREEN`, `Scope.SESSION`, `Scope.GLOBAL`) decouple views from data sources; `component.bindState(...)` unsubscribes automatically on `destroy()`.
+- **Server-Optional Networking:** `UINetwork` provides remote screen opening (`ScreenRegistry`), batched state sync (`PacketStateBatch`), request–response RPC (`PacketGuiRpc`), and multi-player channels (`UIChannels`) protected by `ActionGuard` and per-action rate limiting, while allowing client-only operation on vanilla servers.
 
-| Feature | Description |
-|---------|-------------|
-| **Component Tree** | Retained-mode DOM-like hierarchy. Components are added via `addChild()` and automatically managed. |
-| **Flexbox Layout** | `GuiPanel` with `VERTICAL`, `HORIZONTAL`, or `ABSOLUTE` direction. Supports gaps, padding, margin, and wrapping. |
-| **Event Bubbling** | Mouse and keyboard events propagate through the tree. Z-index layer ordering determines which component receives the event first. |
-| **Reactive State** | `State<T>` provides observable data containers. Components bind to state via `bindState()` and update automatically. |
-| **Theme System** | `ITheme` interface for full visual customization. Apply per-screen or per-component. Built-in `DefaultTheme` dark theme. |
-| **Dirty Flag Optimization** | Layout and render sorting only execute when marked dirty. Avoids unnecessary recalculations. |
-| **Video Playback** | Zero-Copy Dual-decoder architecture: DirectMemoryVideoDecoder (native NIO) with JCodec (pure-Java) fallback. Supports up to 1280x720 natively without GC overhead. |
-| **Media Service** | Centralized API for pre-loading and asynchronous streaming of multimedia assets via `X4UI.getMediaService()`. |
-| **Remote Assets** | `RemoteResourceManager` downloads and caches media from HTTP/HTTPS URLs with SHA-256 file hashing. |
-| **Fluent Builder** | `GuiBuilder<T>` provides chainable API for declarative component construction. |
-| **Memory Safety** | `FontWidthCache` uses per-mod LRU eviction (10,000 entries) to prevent memory leaks in text-heavy UIs. |
-| **Nested Scissor** | `ScissorHelper` manages nested OpenGL scissor regions for scroll clipping. |
-| **Animation Engine** | `GuiAnimator` with LINEAR, EASE_IN, EASE_OUT, and EASE_IN_OUT easing functions. |
+### Architecture & Systems Overview
+
+| System | Key Classes | Responsibility |
+| :--- | :--- | :--- |
+| **Component Tree & Screens** | `GuiBaseScreen`, `GuiBaseContainer`, `GuiComponent`, `GuiPanel` | Deterministic lifecycle, event bubbling, z-layer sorting, centered modal windows |
+| **Responsive Layout** | `FlexLayout`, `FlexDirection`, `FlexAlign`, `GuiScrollPanel` | Flexbox alignment, percentage sizing, `hugContent`, automatic scrollbar reservation |
+| **Graphics Abstraction** | `IGraphics`, `GLGraphics` | Matrix/alpha/tint/scissor stack, rounded primitives, `clearDepthBuffer()`, BGRA textures |
+| **Vector Typography** | `IFont`, `TrueTypeFont`, `VanillaFont`, `FontRegistry` | TrueType/OpenType glyph atlas, vanilla `§` formatting, LRU width cache, `F3+T` reload |
+| **Reactive State** | `State<T>`, `UIStateBus` | Thread-safe observable values with `SCREEN`/`SESSION`/`GLOBAL` scopes and namespaces |
+| **Networking & Security** | `UINetwork`, `ScreenRegistry`, `UIChannels`, `ActionGuard` | Handshake, remote screens, RPC, Pub/Sub channels, distance/OP guards, rate-limiting |
+| **Media Pipeline** | `MediaPipeline`, `MediaManager`, `SecurityUtils`, `GuiVideo`, `GuiImage` | Async downloads, SSRF/path guards, OS `ffmpeg` discovery (Linux/macOS/Win) + JCodec fallback |
+| **Runtime Compatibility** | `PlatformBridge`, `KeyCodes`, `UIInput` | Java 8/25 Multi-Release support, LWJGL 2/3 key & wheel normalization, `displayWidth == 0` guard |
+| **Overlays & Integration** | `GuiOverlayManager`, `OverlayDockManager`, `IGuiOverlay`, `JeiPlugin` | Non-intrusive screen injection, container anchoring, JEI exclusion areas |
 
 ### Installation
 
-Add to `build.gradle`:
+Requirements:
+- **Runtime:** Minecraft Forge `1.12.2` (`14.23.5.2847+`, Java 8) or CleanroomMC (Java 25)
+- **Consumer Build Target:** `sourceCompatibility = 1.8`, `targetCompatibility = 1.8`
+
+Add the dependency from [GitHub Releases](https://github.com/X4yii/x4ui/releases) or JitPack in `build.gradle`:
 
 ```gradle
 repositories {
-    maven { url "https://maven.x4yi.com/" }
+    maven { url "https://jitpack.io" }
 }
 
 dependencies {
-    deobfCompile "com.x4yi:X4UI-1.12.2:1.0b5"
+    deobfCompile "com.github.x4yi:X4UI:r1.0b6"
 }
 ```
 
 ### Quick Start
 
 ```java
+package com.example.mymod.client.gui;
+
 import com.x4yi.x4ui.client.gui.base.GuiBaseScreen;
-import com.x4yi.x4ui.client.gui.component.GuiPanel;
-import com.x4yi.x4ui.client.gui.component.GuiLabel;
 import com.x4yi.x4ui.client.gui.component.GuiButton;
-import com.x4yi.x4ui.client.gui.component.layout.FlexDirection;
+import com.x4yi.x4ui.client.gui.component.GuiLabel;
+import com.x4yi.x4ui.client.gui.component.GuiPanel;
 import net.minecraft.client.gui.GuiScreen;
 
-public class MyScreen extends GuiBaseScreen {
+public class ExampleScreen extends GuiBaseScreen {
 
-    public MyScreen(GuiScreen parent) {
-        super(parent, "My Screen");
+    public ExampleScreen(GuiScreen parent) {
+        super(parent, "Example");
     }
 
     @Override
     protected void initComponents() {
-        rootPanel.setFlexDirection(FlexDirection.VERTICAL);
-        rootPanel.setGap(5);
+        GuiPanel window = createCenteredWindow(360, 220);
 
-        rootPanel.addChild(new GuiLabel(0, 0, "Hello X4UI", 0xFFFFFFFF).setCentered(true));
-        rootPanel.addChild(new GuiButton(0, 0, 120, 20, "Click Me", () -> System.out.println("Clicked!")));
-        rootPanel.addChild(new GuiButton(0, 0, 120, 20, "Close", () -> this.closeScreen()));
+        GuiPanel header = GuiPanel.row(8);
+        header.addChild(new GuiLabel(0, 0, "Control Panel", 0xFFFFFFFF));
+        header.addChild(GuiPanel.spacer());
+        header.addChild(new GuiButton(0, 0, 20, 20, "X", this::closeScreen));
+
+        GuiPanel body = GuiPanel.card(10, 6);
+        body.addChild(new GuiButton(0, 0, 0, 22, "Execute Action", () -> {
+            sendActionOrLocal("mymod:ping", null, () -> {});
+        }).withPercentWidth(1.0f).withVariant(GuiButton.Variant.PRIMARY));
+
+        window.addChild(header);
+        window.addChild(body);
+        rootPanel.addChild(window);
     }
 }
 ```
 
-Open the screen:
-
-```java
-Minecraft.getMinecraft().displayGuiScreen(new MyScreen(Minecraft.getMinecraft().currentScreen));
-```
-
 ### Documentation
 
-| Document | Description |
-|----------|-------------|
-| [00 - Getting Started](Docs/en-us/00-getting-started.md) | Installation, creating screens, fluent API, theme setup, pitfalls |
-| [01 - Core Concepts](Docs/en-us/01-core-concepts.md) | Component tree, lifecycle, flexbox, events, State, UIStateBus, animation |
-| [02 - Remote Assets](Docs/en-us/02-remote-assets.md) | RemoteResourceManager, URL loading, cache management, limitations |
-| [03 - Networking & Sync](Docs/en-us/03-networking-and-sync.md) | Sided proxies, server-optional handshake, container sync, IGuiActionSender |
-| [04 - Responsive Layout](Docs/en-us/04-responsive-layout-and-scaling.md) | GUI Scale 1x-4x adaptation, percentage sizing, adaptive grid, scrollbars |
-| [05 - Graphics & Rendering](Docs/en-us/05-graphics-and-rendering.md) | IGraphics abstraction, state stack, primitives, CCW vertex winding |
-| [06 - Vector Typography](Docs/en-us/06-typography-and-fonts.md) | IFont, TrueTypeFont rasterization, FontRegistry, F3+T hot-reloading |
-| [07 - GUI Overlays & Injection](Docs/en-us/07-gui-overlays-and-injection.md) | Non-intrusive screen injection, GuiOverlayManager, OverlayDockManager |
-| [08 - Integrations & Best Practices](Docs/en-us/08-integrations-and-best-practices.md) | JEI support, UIStateBus, ThemeRegistry, definitive what to avoid table |
-| [Buttons & Inputs](Docs/en-us/components/buttons-and-inputs.md) | GuiButton, GuiTextInput, GuiToggle, typed modular GuiSlider |
-| [Containers & Panels](Docs/en-us/components/containers-and-panels.md) | GuiPanel, GuiScrollPanel with sticky sessions, GuiVirtualList, GuiSlot |
-| [Multimedia](Docs/en-us/components/multimedia.md) | GuiImage (9-slice), animated GuiSprite engine, GuiVideo, GuiAudio |
-| [Advanced Components](Docs/en-us/components/advanced-components.md) | GuiMarkdown, GuiModelRender with Z-buffer, scrollable GuiDropdown, Tooltips |
+> *Note: Only the X4UI documentation was drafted with AI (Gemini); all technical specifications and examples were reviewed and approved through human testing (X4yi).*
+
+| Document | Scope |
+| :--- | :--- |
+| [00 - Getting Started](Docs/en-us/00-getting-started.md) | Requirements, installation, package map, `GuiBaseScreen`, `GuiBaseContainer`, fluent API |
+| [01 - Core Concepts](Docs/en-us/01-core-concepts.md) | Retained-mode paradigm, component tree, lifecycle, `State<T>`, `UIStateBus`, themes, dirty flags |
+| [02 - Remote Assets](Docs/en-us/02-remote-assets.md) | `MediaPipeline`, OS `ffmpeg` discovery, JCodec fallback, `SecurityUtils`, supported formats |
+| [03 - Networking & Sync](Docs/en-us/03-networking-and-sync.md) | Sidedness, `UINetwork`, `ScreenRegistry`, `PacketGuiRpc`, `UIChannels`, `ActionGuard`, `Container` sync |
+| [04 - Responsive Layout](Docs/en-us/04-responsive-layout-and-scaling.md) | `ScaledResolution`, GUI Scale 1x–4x standard, `FlexLayout`, `FlexAlign`, `GuiScrollPanel` |
+| [05 - Graphics & Rendering](Docs/en-us/05-graphics-and-rendering.md) | `IGraphics` abstraction, state stack, scissor clipping, drawing primitives, depth & BGRA textures |
+| [06 - Typography & Fonts](Docs/en-us/06-typography-and-fonts.md) | `IFont`, `TrueTypeFont`, `VanillaFont`, `FontRegistry`, `F3+T` hot-reload, VRAM discipline |
+| [07 - GUI Overlays & Injection](Docs/en-us/07-gui-overlays-and-injection.md) | `IGuiOverlay`, `GuiOverlayManager`, `OverlayDockManager`, `ContainerAnchor` |
+| [08 - Integrations & Best Practices](Docs/en-us/08-integrations-and-best-practices.md) | JEI integration, naming conventions, decoupled views, memory safety, anti-pattern reference |
+| [09 - Forge & CleanroomMC Compatibility](Docs/en-us/09-forge-cleanroom-compatibility.md) | Java 8 ↔ Java 25 portability, `PlatformBridge`, `KeyCodes`, `UIInput`, `reobfJar` rules |
+| [Buttons & Inputs](Docs/en-us/components/buttons-and-inputs.md) | `GuiButton`, `GuiTextInput`, `GuiToggle`, `GuiSliderInt` / `Float` / `Double` |
+| [Containers & Panels](Docs/en-us/components/containers-and-panels.md) | `GuiPanel`, `GuiCard`, `GuiScrollPanel`, `GuiSlot` |
+| [Multimedia](Docs/en-us/components/multimedia.md) | `GuiImage` (URL, `ResourceLocation`, 9-slice), `GuiVideo` (async player & error handling), `GuiAudio`, `GuiSprite` |
+| [Advanced Components](Docs/en-us/components/advanced-components.md) | `GuiVirtualList`, `GuiDropdown`, `GuiMarkdown`, `GuiModelRender`, `GuiTooltip` |
 
 ### License
 
@@ -113,107 +123,111 @@ X4UI is licensed under the GNU General Public License v3 (GPL-3.0).
 
 <h2 id="-espanol">Espa&ntilde;ol</h2>
 
-### &iquest;Qu&eacute; es X4UI?
+### Qu&eacute; Soluciona X4UI
 
-X4UI es un framework de interfaz de usuario de modo retenido para Minecraft Forge 1.12.2. Reemplaza el renderizado de modo inmediato de `GuiScreen` de vanilla con una arquitectura de árbol de componentes, diseños flexbox, propagación de eventos, enlace de estado reactivo y soporte de temas.
+El sistema nativo de `GuiScreen` y `GuiContainer` depende de renderizado en modo inmediato dentro de `drawScreen()`, coordenadas absolutas en píxeles, mutación directa de OpenGL y acoplamiento entre vista y lógica. Las interfaces construidas directamente sobre vanilla se rompen en `GUI Scale` 3–4, filtran listeners o memoria nativa y fallan entre **Forge 1.12.2 (Java 8 + LWJGL 2)** y **CleanroomMC (Java 25 + LWJGL 3)**.
 
-### &iquest;Cuándo usar X4UI?
+X4UI (`r1.0b6`) reemplaza el código ad-hoc por un framework de modo retenido diseñado con portabilidad dual de runtime, estado reactivo con limpieza automática y comunicación servidor–cliente desacoplada.
 
-- **Guías o manuales interactivos**: `GuiMarkdown` renderiza texto formateado con encabezados, negrita, cursiva, código, enlaces, citas, listas, imágenes y separadores.
-- **Árboles de habilidades RPG y menús complejos**: Paneles anidados, botones, interruptores, sliders y dropdowns con layout flexbox automático.
-- **Interfaces ricas en medios**: Incrusta reproducción de video MP4 (`GuiVideo`), imágenes estáticas desde URLs (`GuiImage`) y fondos escalables 9-slice (`GuiSprite`).
-- **Pantallas de inventario personalizadas**: Envuelve contenedores de Minecraft con `GuiBaseContainer` y `GuiSlot` para grids de inventario con flex layout.
+### Paradigma y Decisiones de Dise&ntilde;o
 
-### Características Principales
+- **Árbol de Componentes en Modo Retenido:** Toda interfaz es una jerarquía de nodos `GuiComponent` bajo `rootPanel`. El cálculo de diseño y el ordenamiento de capas se ejecutan bajo demanda mediante banderas sucias (`requestLayout()`, `requestRender()`), evitando recálculos por fotograma.
+- **Separación `api` / `impl`:** Las interfaces públicas (`IGraphics`, `IFont`, `IMediaService`) residen en `com.x4yi.x4ui.api.*`, mientras que OpenGL, rasterización TrueType y backends FFmpeg/JCodec se aíslan en `com.x4yi.x4ui.impl.*`.
+- **Abstracción Dual de Runtime (`PlatformBridge`):** Empaquetado como **Multi-Release JAR** (`Java 8` base + `META-INF/versions/21/`) para que `Cleaner`, executors de I/O, `KeyCodes`, `UIInput` e `IGraphics` operen de forma transparente en Forge 1.12.2 (Java 8) y CleanroomMC (Java 25).
+- **Estado Reactivo Ligado al Ciclo de Vida:** `State<T>` y `UIStateBus` (`Scope.SCREEN`, `Scope.SESSION`, `Scope.GLOBAL`) desacoplan la vista de los datos; `component.bindState(...)` desuscribe los listeners automáticamente al ejecutar `destroy()`.
+- **Red Server-Optional:** `UINetwork` ofrece apertura remota de pantallas (`ScreenRegistry`), lotes de estado (`PacketStateBatch`), RPC request–response (`PacketGuiRpc`) y canales multi-jugador (`UIChannels`) protegidos con `ActionGuard` y rate-limiting, sin impedir la ejecución client-only en servidores vanilla.
 
-| Característica | Descripción |
-|----------------|-------------|
-| **Árbol de Componentes** | Jerarquía retenida tipo DOM. Los componentes se agregan con `addChild()` y se gestionan automáticamente. |
-| **Flexbox Layout** | `GuiPanel` con dirección `VERTICAL`, `HORIZONTAL` o `ABSOLUTE`. Soporta gaps, padding, margin y wrapping. |
-| **Propagación de Eventos** | Eventos de mouse y teclado se propagan por el árbol. El orden de capas Z determina qué componente recibe el evento primero. |
-| **Estado Reactivo** | `State<T>` proporciona contenedores de datos observables. Los componentes se enlazan al estado con `bindState()` y se actualizan automáticamente. |
-| **Sistema de Temas** | Interfaz `ITheme` para personalización visual completa. Se aplica por pantalla o por componente. `DefaultTheme` oscuro incluido. |
-| **Optimización con Dirty Flags** | El layout y el orden de render solo se ejecutan cuando se marca como sucio. Evita recálculos innecesarios. |
-| **Reproducción de Video** | Arquitectura de doble decodificador Zero-Copy: DirectMemoryVideoDecoder (NIO nativo) con respaldo JCodec (pure-Java). Soporta hasta 1280x720 nativo sin penalizar el GC. |
-| **Media Service** | API centralizada para pre-carga y streaming asíncrono de assets multimedia vía `X4UI.getMediaService()`. |
-| **Assets Remotos** | `RemoteResourceManager` descarga y almacena en caché medios desde URLs HTTP/HTTPS con hash SHA-256. |
-| **Builder Fluente** | `GuiBuilder<T>` proporciona API encadenable para construcción declarativa de componentes. |
-| **Seguridad de Memoria** | `FontWidthCache` usa evicción LRU por mod (10,000 entradas) para prevenir fugas de memoria en UIs con mucho texto. |
-| **Scissor Anidado** | `ScissorHelper` gestiona regiones OpenGL scissor anidadas para clipping de scroll. |
-| **Motor de Animación** | `GuiAnimator` con funciones de easing LINEAR, EASE_IN, EASE_OUT y EASE_IN_OUT. |
+### Resumen de Arquitectura y Sistemas
 
-### Instalación
+| Sistema | Clases Clave | Responsabilidad |
+| :--- | :--- | :--- |
+| **Árbol y Pantallas** | `GuiBaseScreen`, `GuiBaseContainer`, `GuiComponent`, `GuiPanel` | Ciclo de vida determinista, propagación de eventos, orden Z, ventanas modales |
+| **Diseño Responsivo** | `FlexLayout`, `FlexDirection`, `FlexAlign`, `GuiScrollPanel` | Alineación flexbox, tamaños porcentuales, `hugContent`, reserva de scrollbar |
+| **Abstracción Gráfica** | `IGraphics`, `GLGraphics` | Pila de matrices/alfa/tinte/scissor, primitivas, `clearDepthBuffer()`, texturas BGRA |
+| **Tipografía Vectorial** | `IFont`, `TrueTypeFont`, `VanillaFont`, `FontRegistry` | Atlas TrueType/OpenType, códigos `§`, caché LRU de anchos, recarga `F3+T` |
+| **Estado Reactivo** | `State<T>`, `UIStateBus` | Contenedores thread-safe con alcances `SCREEN`/`SESSION`/`GLOBAL` y namespaces |
+| **Red y Seguridad** | `UINetwork`, `ScreenRegistry`, `UIChannels`, `ActionGuard` | Handshake, pantallas remotas, RPC, canales Pub/Sub, guardas y rate-limiting |
+| **Pipeline Multimedia** | `MediaPipeline`, `MediaManager`, `SecurityUtils`, `GuiVideo`, `GuiImage` | Descargas asíncronas, protección SSRF/path, `ffmpeg` en OS + fallback JCodec |
+| **Compatibilidad Dual** | `PlatformBridge`, `KeyCodes`, `UIInput` | Soporte Java 8/25 Multi-Release, normalización LWJGL 2/3, guarda `displayWidth == 0` |
+| **Overlays e Inyección** | `GuiOverlayManager`, `OverlayDockManager`, `IGuiOverlay`, `JeiPlugin` | Inyección no intrusiva, anclaje a contenedores, áreas de exclusión JEI |
 
-Agregar a `build.gradle`:
+### Instalaci&oacute;n
+
+Requisitos:
+- **Runtime:** Minecraft Forge `1.12.2` (`14.23.5.2847+`, Java 8) o CleanroomMC (Java 25)
+- **Target de compilación para mods consumidores:** `sourceCompatibility = 1.8`, `targetCompatibility = 1.8`
+
+Agrega la dependencia desde [GitHub Releases](https://github.com/X4yii/x4ui/releases) o JitPack en `build.gradle`:
 
 ```gradle
 repositories {
-    maven { url "https://maven.x4yi.com/" }
+    maven { url "https://jitpack.io" }
 }
 
 dependencies {
-    deobfCompile "com.x4yi:X4UI-1.12.2:1.0b5"
+    deobfCompile "com.github.x4yi:X4UI:r1.0b6"
 }
 ```
 
-### Inicio Rápido
+### Inicio R&aacute;pido
 
 ```java
+package com.example.mymod.client.gui;
+
 import com.x4yi.x4ui.client.gui.base.GuiBaseScreen;
-import com.x4yi.x4ui.client.gui.component.GuiPanel;
-import com.x4yi.x4ui.client.gui.component.GuiLabel;
 import com.x4yi.x4ui.client.gui.component.GuiButton;
-import com.x4yi.x4ui.client.gui.component.layout.FlexDirection;
+import com.x4yi.x4ui.client.gui.component.GuiLabel;
+import com.x4yi.x4ui.client.gui.component.GuiPanel;
 import net.minecraft.client.gui.GuiScreen;
 
-public class MyScreen extends GuiBaseScreen {
+public class ExampleScreen extends GuiBaseScreen {
 
-    public MyScreen(GuiScreen parent) {
-        super(parent, "Mi Pantalla");
+    public ExampleScreen(GuiScreen parent) {
+        super(parent, "Ejemplo");
     }
 
     @Override
     protected void initComponents() {
-        rootPanel.setFlexDirection(FlexDirection.VERTICAL);
-        rootPanel.setGap(5);
+        GuiPanel window = createCenteredWindow(360, 220);
 
-        rootPanel.addChild(new GuiLabel(0, 0, "Hola X4UI", 0xFFFFFFFF).setCentered(true));
-        rootPanel.addChild(new GuiButton(0, 0, 120, 20, "Clic Aquí", () -> System.out.println("¡Clic!")));
-        rootPanel.addChild(new GuiButton(0, 0, 120, 20, "Cerrar", () -> this.closeScreen()));
+        GuiPanel header = GuiPanel.row(8);
+        header.addChild(new GuiLabel(0, 0, "Panel de Control", 0xFFFFFFFF));
+        header.addChild(GuiPanel.spacer());
+        header.addChild(new GuiButton(0, 0, 20, 20, "X", this::closeScreen));
+
+        GuiPanel body = GuiPanel.card(10, 6);
+        body.addChild(new GuiButton(0, 0, 0, 22, "Ejecutar Acción", () -> {
+            sendActionOrLocal("mymod:ping", null, () -> {});
+        }).withPercentWidth(1.0f).withVariant(GuiButton.Variant.PRIMARY));
+
+        window.addChild(header);
+        window.addChild(body);
+        rootPanel.addChild(window);
     }
 }
 ```
 
-Abrir la pantalla:
+### Documentaci&oacute;n
 
-```java
-Minecraft.getMinecraft().displayGuiScreen(new MyScreen(Minecraft.getMinecraft().currentScreen));
-```
+> *Nota: Únicamente la documentación de X4UI fue redactada con IA (Gemini), siendo revisada y aprobada mediante pruebas humanas (X4yi).*
 
-### Documentación
-
-| Documento | Descripción |
-|-----------|-------------|
-| [00 - Primeros Pasos](Docs/es-latam/00-getting-started.md) | Instalación, creación de pantallas, API fluida, temas, qué evitar |
-| [01 - Conceptos Fundamentales](Docs/es-latam/01-core-concepts.md) | Árbol de componentes, ciclo de vida, flexbox, eventos, State, UIStateBus |
-| [02 - Recursos Remotos](Docs/es-latam/02-remote-assets.md) | RemoteResourceManager, carga asíncrona por URL, gestión de caché |
-| [03 - Red y Sincronización](Docs/es-latam/03-networking-and-sync.md) | Proxies sided, conexión server-optional, sincronización con contenedor |
-| [04 - Diseño Responsivo](Docs/es-latam/04-responsive-layout-and-scaling.md) | Adaptación a GUI Scale 1x-4x, porcentajes, cuadrícula y scrollbars |
-| [05 - Abstracción Gráfica](Docs/es-latam/05-graphics-and-rendering.md) | Capa IGraphics, pila de estados, primitivas, bobinado de vértices CCW |
-| [06 - Tipografía Vectorial](Docs/es-latam/06-typography-and-fonts.md) | IFont, rasterizador TrueTypeFont, FontRegistry, recarga F3+T |
-| [07 - Superposiciones en GUI](Docs/es-latam/07-gui-overlays-and-injection.md) | Inyección no intrusiva en pantallas, GuiOverlayManager, acoplamiento |
-| [08 - Integraciones y Mejores Prácticas](Docs/es-latam/08-integrations-and-best-practices.md) | JEI nativo, UIStateBus, ThemeRegistry, tabla definitiva de qué evitar |
-| [Botones e Inputs](Docs/es-latam/components/buttons-and-inputs.md) | GuiButton, GuiTextInput, GuiToggle, GuiSlider tipado y modular |
-| [Contenedores y Paneles](Docs/es-latam/components/containers-and-panels.md) | GuiPanel, GuiScrollPanel con scroll sticky, GuiVirtualList, GuiSlot |
-| [Multimedia](Docs/es-latam/components/multimedia.md) | GuiImage (9-slice), motor de GuiSprite animado, GuiVideo, GuiAudio |
-| [Componentes Avanzados](Docs/es-latam/components/advanced-components.md) | GuiMarkdown, GuiModelRender con Z-buffer, GuiDropdown con scroll, Tooltips |
+| Documento | Alcance |
+| :--- | :--- |
+| [00 - Primeros Pasos](Docs/es-latam/00-getting-started.md) | Requisitos, instalación, mapa de paquetes, `GuiBaseScreen`, `GuiBaseContainer`, API fluida |
+| [01 - Conceptos Fundamentales](Docs/es-latam/01-core-concepts.md) | Paradigma retenido, árbol de componentes, ciclo de vida, `State<T>`, `UIStateBus`, temas |
+| [02 - Recursos Remotos](Docs/es-latam/02-remote-assets.md) | `MediaPipeline`, descubrimiento OS de `ffmpeg`, fallback JCodec, `SecurityUtils`, formatos |
+| [03 - Red y Sincronización](Docs/es-latam/03-networking-and-sync.md) | Sidedness, `UINetwork`, `ScreenRegistry`, `PacketGuiRpc`, `UIChannels`, `ActionGuard`, `Container` |
+| [04 - Diseño Responsivo](Docs/es-latam/04-responsive-layout-and-scaling.md) | `ScaledResolution`, estándar GUI Scale 1x–4x, `FlexLayout`, `FlexAlign`, `GuiScrollPanel` |
+| [05 - Gráficos y Renderizado](Docs/es-latam/05-graphics-and-rendering.md) | Abstracción `IGraphics`, pila de estados, scissor, primitivas, profundidad y texturas BGRA |
+| [06 - Tipografía y Fuentes](Docs/es-latam/06-typography-and-fonts.md) | `IFont`, `TrueTypeFont`, `VanillaFont`, `FontRegistry`, recarga `F3+T`, disciplina VRAM |
+| [07 - Overlays e Inyección](Docs/es-latam/07-gui-overlays-and-injection.md) | `IGuiOverlay`, `GuiOverlayManager`, `OverlayDockManager`, `ContainerAnchor` |
+| [08 - Integraciones y Buenas Prácticas](Docs/es-latam/08-integrations-and-best-practices.md) | Integración JEI, convenciones de nombres, vistas desacopladas, memoria y antipatrones |
+| [09 - Compatibilidad Forge y CleanroomMC](Docs/es-latam/09-forge-cleanroom-compatibility.md) | Portabilidad Java 8 ↔ Java 25, `PlatformBridge`, `KeyCodes`, `UIInput`, reglas `reobfJar` |
+| [Botones y Entradas](Docs/es-latam/components/buttons-and-inputs.md) | `GuiButton`, `GuiTextInput`, `GuiToggle`, `GuiSliderInt` / `Float` / `Double` |
+| [Contenedores y Paneles](Docs/es-latam/components/containers-and-panels.md) | `GuiPanel`, `GuiCard`, `GuiScrollPanel`, `GuiSlot` |
+| [Multimedia](Docs/es-latam/components/multimedia.md) | `GuiImage` (URL, `ResourceLocation`, 9-slice), `GuiVideo` (errores/carga), `GuiAudio`, `GuiSprite` |
+| [Componentes Avanzados](Docs/es-latam/components/advanced-components.md) | `GuiVirtualList`, `GuiDropdown`, `GuiMarkdown`, `GuiModelRender`, `GuiTooltip` |
 
 ### Licencia
 
-X4UI está licenciado bajo la GNU General Public License v3 (GPL-3.0).
-
----
-
-<div align="center">
-  <i>X4UI is open-source and available under the GNU General Public License v3 (GPL-3.0).</i>
-</div>
+X4UI está licenciado bajo GNU General Public License v3 (GPL-3.0).

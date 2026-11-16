@@ -1,111 +1,77 @@
 # 06 - Vector Typography & Fonts (`IFont`)
 
-X4UI r1.0b5 features a hardware-accelerated vector typography engine centered on the `IFont` interface (`com.x4yi.x4ui.api.client.font.IFont`) and the centralized `FontRegistry`. It enables crisp TrueType/OpenType (`.ttf`/`.otf`) text rendering with continuous anti-aliasing, native support for vanilla formatting codes (`§0`-`§f`, `§l`, etc.), and dynamic hot-reloading.
+This document covers X4UI's typography system (`r1.0b6`), centered on the `IFont` contract (`com.x4yi.x4ui.api.client.font.IFont`) and the central `FontRegistry`.
 
 ---
 
-## 1. The `IFont` Abstraction
+## 1. Problem & Design Decisions
 
-Visual components in X4UI seamlessly interact with either vanilla bitmap fonts or custom vector typefaces via `IFont`:
+Vanilla's `FontRenderer` relies on fixed bitmap sheets that blur or alias under HiDPI displays and large GUI scales. Conversely, naive TrueType integration exhausts VRAM with duplicate glyph atlases and stalls frames when measuring long strings repeatedly.
+
+X4UI solves this with four design decisions:
+1. **`IFont` abstraction:** Unifies `VanillaFont` and `TrueTypeFont` behind one measurement and rendering contract.
+2. **Dynamic VRAM glyph atlas (`TrueTypeFont`):** Rasterizes glyphs on demand with anti-aliasing and full vanilla formatting code support (`§0`–`§f`, `§l`, `§o`, `§n`).
+3. **Bounded width cache (`FontWidthCache`):** LRU eviction caches repeated width lookups without unbounded memory growth.
+4. **Centralized lifecycle (`FontRegistry`):** Ensures single-load registration and transparent hot-reloading on `F3 + T`.
+
+---
+
+## 2. `IFont` Contract & Built-In Implementations
 
 | Method | Return | Description |
-|--------|--------|-------------|
-| `drawString(text, x, y, color, shadow)` | `float` | Renders text string and returns horizontal advance in X |
-| `getStringWidth(text)` | `int` | Computes pixel width while stripping formatting codes (`§`) |
-| `getFontHeight()` | `int` | Returns font line height |
-| `splitText(text, maxWrapWidth)` | `List<String>` | Wraps string into lines based on word boundaries |
-| `trimStringToWidth(text, width)` | `String` | Truncates text string to fit target pixel width |
+| :--- | :--- | :--- |
+| `drawString(text, x, y, color, shadow)` | `float` | Renders the string and returns horizontal X advance. |
+| `getStringWidth(text)` | `int` | Computes logical pixel width ignoring `§` formatting codes. |
+| `getFontHeight()` | `int` | Returns line height. |
+| `splitText(text, maxWrapWidth)` | `List<String>` | Word-wraps text to fit within `maxWrapWidth`. |
+| `trimStringToWidth(text, width)` | `String` | Truncates text to fit within `width`. |
 
----
-
-## 2. Built-in Implementations
-
-### `VanillaFont`
-Wraps Minecraft's native `FontRenderer`, ensuring exact visual fidelity and pixel-perfect backward compatibility with vanilla text rendering.
-
-### `TrueTypeFont`
-Hardware-accelerated dynamic vector font engine:
-- On-demand glyph rasterization into dynamic OpenGL texture atlases in VRAM.
-- Bicubic anti-aliasing for superior legibility on HiDPI and 4K displays.
-- Full support for vanilla color codes (`§a`, `§c`, etc.) and styles (`§l` bold, `§o` italic, `§n` underline).
-- Batched drop-shadow rendering in a single draw pass with 1 px offset.
+- **`VanillaFont`:** Wraps Minecraft's built-in `FontRenderer`.
+- **`TrueTypeFont`:** Hardware-accelerated vector rasterizer for `.ttf` and `.otf` assets.
 
 ---
 
 ## 3. Central Registry (`FontRegistry`)
 
-`FontRegistry` centralizes loading, caching, and hot-reloading:
-
-### Registering TrueType Fonts from Mod Assets
-Place your `.ttf` or `.otf` files under `src/main/resources/assets/mymod/fonts/`:
+Register fonts once during client initialization (`ClientProxy` / `FMLPreInitializationEvent`):
 
 ```java
-// Inside your ClientProxy (during FMLPreInitializationEvent)
+// From mod assets (src/main/resources/assets/mymod/fonts/)
 FontRegistry.registerTrueType(
     "roboto_regular",
     new ResourceLocation("mymod", "fonts/roboto-regular.ttf"),
-    14.0f // Point size
+    14.0f
 );
 
-FontRegistry.registerTrueType(
-    "jetbrains_mono",
-    new ResourceLocation("mymod", "fonts/jetbrains-mono.ttf"),
-    12.0f
-);
-```
+// OS font (use only as fallback)
+FontRegistry.registerSystem("sans_fallback", "SansSerif", Font.PLAIN, 14.0f);
 
-### Registering Operating System Fonts
-```java
-FontRegistry.registerSystem("arial", "Arial", Font.PLAIN, 14.0f);
-```
-
-### Querying Registered Fonts
-```java
-IFont roboto = FontRegistry.get("roboto_regular");
-IFont mono = FontRegistry.getOrDefault("jetbrains_mono", FontRegistry.getDefault());
+// Retrieval in components
+IFont font = FontRegistry.getOrDefault("roboto_regular", FontRegistry.getDefault());
 ```
 
 ---
 
-## 4. Applying Fonts to Components
+## 4. Component Assignment & Hot-Reloading (`F3 + T`)
 
-Fonts can be assigned to individual components or propagated down entire container subtrees using the fluent `withFont()` builder:
+Components and containers inherit fonts assigned via `withFont(...)`:
 
 ```java
-// Assign font to a label
-GuiLabel title = new GuiLabel(10, 10, "System Settings", 0xFFFFFFFF)
+GuiLabel title = new GuiLabel(0, 0, "Panel", 0xFFFFFFFF)
     .withFont(FontRegistry.get("roboto_regular"));
 
-// Assign font to a button
-GuiButton actionBtn = new GuiButton(10, 40, 120, 24, "Apply", this::onApply)
-    .withFont(FontRegistry.get("roboto_regular"));
-
-// Setting a font on a parent container propagates to all children by default
-headerPanel.withFont(FontRegistry.get("roboto_regular"));
+headerPanel.withFont(FontRegistry.get("roboto_regular")); // Propagates to children
 ```
 
----
-
-## 5. Resource Pack Hot-Reloading (`F3 + T`)
-
-`FontRegistry` subscribes to Minecraft's resource reload bus. When players press `F3 + T` to reload resource packs, all fonts registered via `ResourceLocation` automatically dispose their GPU texture atlases and reload from the newly active resource packs.
+`FontRegistry` hooks into Minecraft's resource reload pipeline (`F3 + T`), releasing previous textures and reloading `ResourceLocation`-backed fonts automatically.
 
 ---
 
-## What to Avoid (Font Pitfalls & Memory Leaks)
+## 5. What to Avoid in Typography
 
-> [!CAUTION]
-> **1. NEVER instantiate `new TrueTypeFont(...)` per tick or inside `renderSelf()`.**
-> Always register fonts once in `FontRegistry`. Re-creating fonts continuously will exhaust GPU memory and crash the client.
-
-> [!WARNING]
-> **2. NEVER depend solely on OS system fonts (`registerSystem`).**
-> If a font is absent on a player's machine, the UI spacing will break. Always bundle `.ttf` files in your mod.
-
-> [!WARNING]
-> **3. NEVER register excessively large font sizes (e.g., above 72 pt).**
-> Huge sizes consume significant VRAM. For massive headings, prefer a 24 pt font scaled via `gfx.scale(2.0f, 2.0f)`.
-
-> [!IMPORTANT]
-> **4. NEVER forget to invoke `dispose()` on unmanaged fonts.**
-> If you manually instantiate a font outside `FontRegistry`, call `font.dispose()` when it's no longer used.
+| Anti-Pattern | Technical Root Cause | Correct Approach |
+| :--- | :--- | :--- |
+| Instantiating `new TrueTypeFont(...)` in `initComponents()` or `renderSelf()` | Allocates duplicate glyph atlases in VRAM on every open or frame | Register once in `FontRegistry` and look up by key |
+| Relying solely on `registerSystem(...)` | Target font may be absent on the player's OS | Bundle `.ttf`/`.otf` files inside `assets/<modid>/fonts/` |
+| Registering oversized point sizes (> 72 pt) | Wastes VRAM for large glyph textures | Register a moderate size (e.g. 16–24 pt) and scale with `gfx.scale(...)` |
+| Omitting `dispose()` on manually managed fonts | Leaks OpenGL textures outside `FontRegistry` lifecycle | Manage via `FontRegistry` or call `font.dispose()` on teardown |

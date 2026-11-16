@@ -1,123 +1,128 @@
 # 01 - Conceptos Fundamentales y Arquitectura
 
-Este documento describe la arquitectura central de X4UI: la filosofía del framework, el árbol jerárquico de componentes, el ciclo de vida estandarizado, el sistema de diseño flexbox, la propagación de eventos, el estado reactivo (`State<T>`), y los antipatrones que debes evitar a toda costa.
+Este documento define el paradigma de modo retenido de X4UI, las decisiones de diseño que sustentan su árbol de componentes, el ciclo de vida determinista, la gestión de estado reactivo y los criterios de optimización mediante banderas sucias (*dirty flags*).
+
+---
+
+## 1. El Paradigma de X4UI y Qué Soluciona
+
+En el sistema vanilla de Minecraft (`GuiScreen`), el código de interfaz es imperativo e inmediato: cada fotograma recalcula posiciones, dibuja primitivas crudas y mezcla la lógica de negocio con el renderizado. Esto provoca acoplamiento fuerte, fugas de estado al redimensionar la ventana y código difícil de mantener.
+
+X4UI adopta un **paradigma de modo retenido tipo DOM**:
+1. **Separación entre estructura y dibujo:** Los componentes se instancian una sola vez en `initComponents()` y se organizan en un árbol jerárquico (`rootPanel`).
+2. **Layout perezoso:** Las coordenadas y dimensiones se recalculan únicamente cuando cambia la estructura o la resolución, nunca en cada fotograma por defecto.
+3. **Vistas reactivas y pasivas (*Dumb Views*):** Los datos residen en contenedores observables (`State<T>`) o en `UIStateBus`; la vista se limita a suscribirse y reflejar cambios.
+4. **Limpieza automática de memoria:** Al destruir un componente o cerrar la pantalla, X4UI desvincula sus suscripciones reactivas y libera animaciones asociadas.
 
 ---
 
 ## 2. Árbol Jerárquico de Componentes
 
-X4UI organiza la interfaz de usuario en un árbol jerárquico de modo retenido (patrón Composite). Cada elemento visual hereda de `GuiComponent`. La raíz de la jerarquía es `rootPanel` (un `GuiPanel` que abarca toda la pantalla).
+Cada elemento visual hereda de `GuiComponent` (patrón Composite). La raíz de toda pantalla es `rootPanel`, un `GuiPanel` que cubre el área lógica de la ventana:
 
 ```
-rootPanel (GuiPanel - Flex Vertical, Ancho 100%)
-├── headerPanel (GuiPanel - Flex Horizontal)
-│   ├── GuiLabel "Título"
-│   └── GuiButton "[X]" (Cerrar)
-├── contentPanel (GuiScrollPanel - Viewport responsivo)
-│   ├── card1 (GuiPanel)
-│   └── card2 (GuiPanel)
-└── footerPanel (GuiPanel - Barra inferior)
+rootPanel (GuiPanel)
+├── headerPanel (GuiPanel.row)
+│   ├── GuiLabel
+│   ├── spacer (GuiPanel.spacer)
+│   └── GuiButton ("X")
+├── contentPanel (GuiScrollPanel)
+│   ├── card1 (GuiPanel.card)
+│   └── card2 (GuiPanel.card)
+└── footerPanel (GuiPanel.row)
     └── GuiSliderInt
 ```
 
-### Operaciones del Árbol
+### Operaciones sobre el Árbol
 
 ```java
 GuiPanel panel = new GuiPanel(0, 0, 0, 300).withPercentWidth(1.0f);
 GuiButton btn = (GuiButton) new GuiButton(0, 0, 0, 20, "Aceptar", () -> {}).withPercentWidth(0.5f);
 
-panel.addChild(btn);       // Agrega btn y dispara onAttached()
-panel.removeChild(btn);    // Remueve btn y dispara onDetached()
-panel.clearChildren();     // Remueve y destruye todos los hijos
+panel.addChild(btn);       // Adjunta btn e invoca onAttached()
+panel.removeChild(btn);    // Separa btn e invoca onDetached()
+panel.clearChildren();     // Separa y destruye todos los hijos
 ```
 
 ---
 
-## 3. Ciclo de Vida del Componente (`GuiComponent`)
+## 3. Ciclo de Vida de `GuiComponent`
 
-El ciclo de vida en X4UI está estandarizado en etapas deterministas:
+El ciclo de vida sigue seis etapas deterministas:
 
-1. **Construcción:** Se establecen las propiedades iniciales en el constructor o mediante la API fluida (`.withPercentWidth()`, `.withVariant()`).
-2. **Adjunción (`onAttached()`):** Invocado al agregarse a un contenedor padre.
-3. **Actualización de Cuadro (`update(float deltaTime)`):** Se ejecuta en cada fotograma antes del renderizado. Si hay flags sucias (`requestLayout()`), se resuelve el diseño y los anchos porcentuales basados en el padre, propagándose a todos los hijos.
+1. **Construcción:** Asignación de propiedades iniciales en el constructor o mediante API fluida (`withPercentWidth`, `withMargin`, `withLayer`).
+2. **Adjunción (`onAttached()`):** Se ejecuta al agregarse a un contenedor padre.
+3. **Actualización (`update(float deltaTime)`):** Se ejecuta antes de renderizar. Si existen banderas sucias de diseño (`requestLayout()`), resuelve dimensiones porcentuales y posicionamiento del `ILayoutManager`, propagándolo hacia los hijos.
 4. **Renderizado (`render(IGraphics gfx, int mouseX, int mouseY, float partialTicks)`):**
-   - Llama a `renderSelf(gfx, mouseX, mouseY, partialTicks)`.
-   - Ordena los hijos por capa (`layer`) y llama a `renderChildren(gfx, ...)` aplicando recorte (*clipping*).
-5. **Separación (`onDetached()`):** Se invoca al removerse del padre.
-6. **Destrucción (`onDestroy()` / `destroy()`):**
-   - Se desvinculan automáticamente todos los listeners reactivos enlazados mediante `bindState()` o `mapState()`.
-   - Se liberan referencias débiles en `GuiAnimator` y se propaga a los hijos.
+   - Invoca `renderSelf(gfx, mouseX, mouseY, partialTicks)`.
+   - Si existe bandera sucia de render (`requestRender()`), reordena los hijos por `layer` (Z-index).
+   - Invoca `renderChildren(gfx, ...)` aplicando recorte (*clipping*) cuando corresponde.
+5. **Separación (`onDetached()`):** Se ejecuta al remover el componente de su padre.
+6. **Destrucción (`destroy()` / `onDestroy()`):**
+   - Desvincula automáticamente todos los listeners enlazados mediante `bindState()` o `mapState()`.
+   - Libera animaciones en `GuiAnimator` y se propaga recursivamente a los hijos.
 
 ---
 
-## 4. Estado Reactivo (`State<T>`)
+## 4. Propagación de Eventos
 
-`State<T>` (en `com.x4yi.x4ui.common`) es un contenedor reactivo seguro para hilos que notifica a los suscriptores cuando su valor muta. Deduplica actualizaciones mediante `Objects.equals()`.
+Los eventos de mouse (`mouseClicked`, `mouseReleased`, `mouseDragged`, `mouseScrolled`) y teclado (`keyTyped`) recorren el árbol respetando visibilidad y orden de capas (`layer`):
+- Los componentes en capas superiores (`layer` mayor) reciben prioridad de captura.
+- Cuando un componente consume el evento (retorna `true`), detiene la propagación hacia capas inferiores.
+
+---
+
+## 5. Estado Reactivo (`State<T>`) y Bus de Estados (`UIStateBus`)
+
+### `State<T>`
+`com.x4yi.x4ui.common.State<T>` es un contenedor observable seguro para hilos y compatible con servidor dedicado. Deduplica notificaciones mediante `Objects.equals()` para evitar trabajo redundante cuando el valor no cambia:
 
 ```java
-import com.x4yi.x4ui.common.State;
-
 State<Integer> score = new State<>(0);
 
-// Enlace seguro al ciclo de vida del componente
+// Vinculación segura ligada al ciclo de vida del componente
 label.bindState(score, val -> label.setText("Puntos: " + val));
 
 score.set(10); // Actualiza la etiqueta automáticamente
 ```
 
----
-
-## 5. Bus de Estados (`UIStateBus`)
-
-Para comunicar módulos o sincronizar datos con el servidor sin acoplamiento directo, `UIStateBus` soporta tres alcances:
-- `Scope.SCREEN`: se limpia automáticamente al cerrar la pantalla (`GuiBaseScreen.onGuiClosed()`), ideal con `syncedState(key, valor)`.
-- `Scope.SESSION`: sobrevive al cierre de pantallas y se limpia al desconectarse del servidor.
+### `UIStateBus`
+Permite compartir estado entre módulos o sincronizar datos desde el servidor sin acoplar referencias directas. Soporta tres alcances:
+- `Scope.SCREEN`: se limpia automáticamente al cerrar la pantalla (`GuiBaseScreen.onGuiClosed()`). Es el alcance utilizado por `syncedState(key, valorInicial)`.
+- `Scope.SESSION`: persiste entre pantallas abiertas y se limpia al desconectarse del servidor.
 - `Scope.GLOBAL`: persiste durante toda la ejecución del cliente.
 
 ```java
-// Estado por pantalla con namespace (evita colisiones entre bloques/entidades)
-String key = UIStateBus.scopedKey("tile:10,64,10", "energy");
+String key = UIStateBus.scopedKey("machine:10,64,10", "energy");
 State<Integer> energy = UIStateBus.getOrCreate(key, 0, UIStateBus.Scope.SCREEN);
-
-// Estado global compartido
-State<Double> power = UIStateBus.getOrCreate("mimod:power", 1.0, UIStateBus.Scope.GLOBAL);
 ```
 
 ---
 
 ## 6. Sistema de Temas (`ITheme` y `ThemeRegistry`)
 
-Los estilos visuales están encapsulados en la interfaz `ITheme`. `DefaultTheme.INSTANCE` provee una paleta oscura estándar. Los componentes heredan el tema de su cadena de ancestros o de `ThemeRegistry.getCurrentTheme()`.
+La apariencia visual está desacoplada de la lógica de componentes mediante `ITheme`. `DefaultTheme.INSTANCE` provee una paleta oscura sólida y minimalista. Los componentes heredan el tema de su cadena de ancestros o utilizan `ThemeRegistry.getCurrentTheme()` como respaldo:
 
 ```java
-ThemeRegistry.registerTheme("mi_tema_oscuro", customTheme);
-rootPanel.setTheme(ThemeRegistry.getTheme("mi_tema_oscuro"));
+ThemeRegistry.registerTheme("custom_dark", customTheme);
+rootPanel.setTheme(ThemeRegistry.getTheme("custom_dark"));
 ```
 
 ---
 
-## 7. Banderas de Actualización (Dirty Flags)
+## 7. Optimización mediante Dirty Flags
 
-- `requestLayout()`: Solicita recalcular dimensiones y posiciones en el próximo cuadro.
-- `requestRender()`: Solicita reordenar las capas visuales (`layer`).
-- Cambios puramente visuales (color, alfa) NO requieren llamar a `requestLayout()`.
+- `requestLayout()`: marca que las dimensiones o la jerarquía estructural cambiaron; el layout se recalculará una única vez en el siguiente `update()`.
+- `requestRender()`: solicita reordenar las capas visuales (`layer`).
+- Las mutaciones puramente visuales (color, opacidad, texto cuando no altera tamaño estructural) no requieren `requestLayout()`.
 
 ---
 
-## Qué Evitar Hacer (Antipatrones Críticos)
+## 8. Qué Evitar al Crear una GUI
 
-> [!CAUTION]
-> **1. NUNCA agregar hijos (`addChild()`) dentro de `renderSelf()` o `render()`.**
-> Instancie y agregue los componentes únicamente al inicializar la vista, nunca durante un fotograma de dibujo.
-
-> [!WARNING]
-> **2. NUNCA llamar a `requestLayout()` incondicionalmente en cada tick.**
-> Hágalo solo cuando una propiedad estructural (ancho, alto, visibilidad, separación) realmente cambie.
-
-> [!WARNING]
-> **3. NUNCA suscribirse manualmente a `State.addListener()` sin desuscribirse.**
-> Utilice siempre `component.bindState()`, que asegura la limpieza de listeners automáticamente cuando el componente muere.
-
-> [!IMPORTANT]
-> **4. NUNCA bloquear el hilo principal de Minecraft.**
-> No realice peticiones de red o disco bloqueantes en callbacks de botones. Utilice `MediaPipeline` (con `CompletableFuture`) o hilos secundarios.
+| Antipatrón | Causa Técnica del Problema | Solución Correcta |
+| :--- | :--- | :--- |
+| Llamar `addChild()` dentro de `renderSelf()` o `render()` | Crea componentes infinitos por fotograma y satura memoria/GC | Instanciar la jerarquía en `initComponents()` |
+| Llamar `requestLayout()` incondicionalmente cada tick | Anula la optimización perezosa y fuerza recálculo completo en cada frame | Invocar solo ante cambios reales de tamaño, visibilidad o hijos |
+| Suscribirse manualmente con `state.addListener(...)` sin limpiar | Retiene referencias fuertes al `GuiComponent` y provoca fugas de memoria | Usar `component.bindState(state, callback)` |
+| Ejecutar I/O o red síncrona en callbacks de botones | Congela el hilo principal del cliente Minecraft | Delegar en `MediaPipeline`, `CompletableFuture` o `UINetwork` |

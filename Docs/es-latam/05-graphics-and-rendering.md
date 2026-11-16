@@ -1,12 +1,21 @@
 # 05 - Abstracción Gráfica y Renderizado (`IGraphics`)
 
-X4UI r1.0b5 introduce la interfaz `IGraphics`. Esta capa desacopla el renderizado de llamadas crudas a OpenGL y LWJGL, gestionando matrices, recortes, tintes y opacidades.
+Este documento describe la capa de renderizado inmediato `IGraphics` (`com.x4yi.x4ui.api.client.gui.IGraphics`) y su implementación `GLGraphics`, diseñada para aislar los componentes de llamadas directas a OpenGL/LWJGL.
 
 ---
 
-## 1. El Contexto Gráfico Inmediato
+## 1. Problema y Decisión de Diseño
 
-Cada componente visual recibe una instancia de `IGraphics` en su método `renderSelf()`:
+Emitir llamadas crudas a `GL11`, `GlStateManager` o `Tessellator` dentro de widgets provoca estados de OpenGL corruptos (blending, depth, scissor, matrices) y rompe la portabilidad entre **Forge 1.12.2 (LWJGL 2)** y **CleanroomMC (LWJGL 3)**.
+
+X4UI encapsula todo el dibujado detrás de `IGraphics`:
+1. **Pila jerárquica determinista:** Cada `save()`, `pushAlpha()`, `pushColorTint()` y `pushClip()` se apila y restaura de forma controlada.
+2. **Recorte anidado por hardware (`ScissorHelper`):** `pushClip()` calcula la intersección con el área de recorte activa del padre, evitando que hijos dentro de un `GuiScrollPanel` sobrescriban límites externos.
+3. **Geometría portátil:** Las primitivas redondeadas, gradientes, carga de texturas BGRA y limpieza de profundidad (`clearDepthBuffer()`) residen en `GLGraphics` sin exponer OpenGL a los componentes.
+
+---
+
+## 2. El Contexto Gráfico en `renderSelf()`
 
 ```java
 @Override
@@ -14,110 +23,84 @@ protected void renderSelf(IGraphics gfx, int mouseX, int mouseY, float partialTi
     int absX = getAbsoluteX();
     int absY = getAbsoluteY();
 
-    // Dibujar fondo y borde
     gfx.drawRect(absX, absY, width, height, 0xFF1E1E28);
     gfx.drawBorder(absX, absY, width, height, 1, 0xFF3E3E50);
-
-    // Dibujar texto con la fuente activa
     gfx.drawString("Panel de Control", absX + 8, absY + 6, 0xFFFFFFFF, true);
 }
 ```
 
 ---
 
-## 2. Pila Jerárquica de Estados
+## 3. Pila Jerárquica de Estados
 
-`IGraphics` mantiene una pila jerárquica que preserva y restaura transformaciones y atributos visuales:
-
-### Guardado y Restauración (`save()` / `restore()`)
-Permite aplicar transformaciones matriciales locales sin afectar a los componentes hermanos o padres:
+### Transformaciones (`save()` / `restore()`)
 
 ```java
 gfx.save();
 gfx.translate(absX + 50, absY + 50);
 gfx.scale(1.5f, 1.5f);
-// Renderizar elemento escalado...
-gfx.restore(); // Restaura la matriz y el estado anterior
+// Dibujo transformado...
+gfx.restore();
 ```
 
-### Modulación de Opacidad (`pushAlpha()` / `popAlpha()`)
-Multiplica la transparencia global de todas las operaciones de dibujo subsiguientes:
+### Opacidad y Tinte (`pushAlpha()` / `pushColorTint()`)
 
 ```java
-gfx.pushAlpha(0.5f); // 50% de transparencia acumulativa
-gfx.drawRect(absX, absY, 100, 100, 0xFF00FF00);
-gfx.drawString("Texto semitransparente", absX, absY, 0xFFFFFFFF, false);
-gfx.popAlpha(); // Restaura la opacidad anterior
-```
-
-### Modulación de Tinte de Color (`pushColorTint()` / `popColorTint()`)
-Aplica una modulación de color multiplicativa en formato ARGB:
-
-```java
-gfx.pushColorTint(0xFFFF8888); // Tinte rojizo
+gfx.pushAlpha(0.5f);
+gfx.pushColorTint(0xFFFF8888);
 gfx.drawTexture(myTexture, absX, absY, 64, 64);
 gfx.popColorTint();
+gfx.popAlpha();
 ```
 
-### Recorte por Tijera Hardware (`pushClip()` / `popClip()`)
-Aplica recorte mediante `GL_SCISSOR_TEST` que se auto-intersecta con los rectángulos de recorte existentes:
+### Recorte Hardware (`pushClip()` / `popClip()`)
 
 ```java
 gfx.pushClip(absX, absY, width, height);
-// Todo lo que se dibuje aquí será recortado si excede los límites
 renderOverflowingContent(gfx);
 gfx.popClip();
 ```
 
 ---
 
-## 3. Catálogo de Primitivas de Dibujo
+## 4. Catálogo de Primitivas
 
 | Método | Propósito |
-|--------|-----------|
-| `drawRect(x, y, w, h, color)` | Rectángulo sólido con color ARGB |
-| `drawRoundedRect(x, y, w, h, radius, color)` | Rectángulo con esquinas redondeadas continuas |
-| `drawBorder(x, y, w, h, thickness, color)` | Borde rectangular con grosor configurable |
-| `drawRoundedBorder(x, y, w, h, radius, thickness, color)` | Borde exterior con esquinas redondeadas |
-| `drawLine(x1, y1, x2, y2, thickness, color)` | Línea continua entre dos puntos |
-| `drawCircle(centerX, centerY, radius, color)` | Círculo relleno suave |
-| `drawGradient(x, y, w, h, topColor, bottomColor)` | Gradiente vertical de dos colores |
-| `drawGradient4Corners(x, y, w, h, tl, tr, br, bl)` | Gradiente bilineal con color independiente por esquina |
-| `drawString(text, x, y, color, shadow)` | Renderizado de texto con la fuente activa (`IFont`) |
-| `drawTexture(texture, x, y, w, h)` | Textura completa estirada a las dimensiones |
-| `drawTexturedRect(x, y, w, h, u1, v1, u2, v2)` | Subregión de textura mapeada por coordenadas UV |
+| :--- | :--- |
+| `drawRect(x, y, w, h, color)` | Rectángulo sólido ARGB. |
+| `drawRoundedRect(x, y, w, h, radius, color)` | Rectángulo con esquinas redondeadas. |
+| `drawBorder(x, y, w, h, thickness, color)` | Borde rectangular de grosor configurable. |
+| `drawRoundedBorder(x, y, w, h, radius, thickness, color)` | Borde exterior con esquinas redondeadas. |
+| `drawLine(x1, y1, x2, y2, thickness, color)` | Línea continua entre dos puntos. |
+| `drawCircle(centerX, centerY, radius, color)` | Círculo relleno. |
+| `drawGradient(x, y, w, h, topColor, bottomColor)` | Gradiente vertical entre dos colores. |
+| `drawGradient4Corners(x, y, w, h, tl, tr, br, bl)` | Gradiente bilineal por esquina. |
+| `drawString(text, x, y, color, shadow)` | Texto con la fuente activa (`IFont`). |
+| `drawTexture(texture, x, y, w, h)` | Textura completa escalada al rectángulo. |
+| `drawTexturedRect(x, y, w, h, u1, v1, u2, v2)` | Subregión UV de textura activa. |
+| `clearDepthBuffer()` | Limpieza segura del buffer de profundidad (ej. modelos 3D). |
 
 ---
 
-## 4. Tipografía Activa
+## 5. Tipografía Activa en `IGraphics`
 
-El contexto `IGraphics` propaga la tipografía activa (`IFont`). Si un componente padre define una fuente, todos sus descendientes la heredan automáticamente:
+El contexto gráfico mantiene la fuente activa (`IFont`) para las operaciones de medición y dibujado de texto:
 
 ```java
-IFont customFont = FontRegistry.get("roboto_medium");
+IFont customFont = FontRegistry.get("roboto_regular");
 gfx.setFont(customFont);
 
-int textW = gfx.getStringWidth("Hola Mundo");
+int textW = gfx.getStringWidth("Texto de prueba");
 int textH = gfx.getFontHeight();
-gfx.drawString("Hola Mundo", absX, absY, 0xFFFFFFFF, true);
+gfx.drawString("Texto de prueba", absX, absY, 0xFFFFFFFF, true);
 ```
 
 ---
 
-## Qué Evitar Hacer (Peligros Críticos de Renderizado)
+## 6. Qué Evitar en Renderizado
 
-> [!CAUTION]
-> **1. NUNCA emitir primitivas gráficas por su cuenta en orden horario (Clockwise).**
-> Utilice siempre los métodos provistos por `IGraphics`. De lo contrario, OpenGL clasificará y descartará silenciosamente la geometría.
-
-> [!WARNING]
-> **2. NUNCA dejar pilas desbalanceadas de `save()`, `pushClip()` o `pushAlpha()`.**
-> Siempre que aplique un estado u opacidad, asegúrese de invocar su respectivo `pop()` para no romper el renderizado de otros componentes.
-
-> [!WARNING]
-> **3. NUNCA activar o desactivar estados puros de OpenGL sin restaurarlos.**
-> Si invoca `GL11.glEnable()` o análogos en `renderSelf()`, restaure el estado anterior obligatoriamente antes de retornar.
-
-> [!IMPORTANT]
-> **4. NUNCA recalcular geometrías matemáticas complejas en cada frame.**
-> Cachee cálculos gráficos costosos (trazado de polígonos complejos o textos enormes) y actualícelos solo cuando los datos origen cambien.
+| Antipatrón | Causa Técnica del Problema | Solución Correcta |
+| :--- | :--- | :--- |
+| Llamadas directas a `GL11`, `GL12` o `Tessellator` en componentes | Desincroniza la pila interna de estados y rompe portabilidad LWJGL 2/3 | Utilizar exclusivamente los métodos de `IGraphics` |
+| Dejar desbalanceados `save()`, `pushClip()`, `pushAlpha()` o `pushColorTint()` | Corrompe las transformaciones y recortes de componentes posteriores | Emparejar cada `push`/`save` con su `pop`/`restore` en el mismo bloque |
+| Recalcular polígonos o particionado de textos extensos en cada fotograma | Penaliza el rendimiento por frame (FPS drop) | Cachear resultados geométricos y recalcular solo al mutar datos |

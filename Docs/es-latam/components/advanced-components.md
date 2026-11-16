@@ -1,52 +1,69 @@
-# Componentes Avanzados
+# Componentes Avanzados (`GuiVirtualList`, `GuiDropdown`, `GuiMarkdown`, `GuiModelRender`, `GuiTooltip`)
 
-Esta sección documenta los componentes diseñados para manejar alto rendimiento o entradas de datos complejas.
+Componentes especializados para listas masivas recicladas, selección desplegable, renderizado Markdown, modelos 3D con depth buffer y tooltips contextuales.
 
-## GuiVirtualList<T>
+---
 
-`GuiVirtualList` es el componente más avanzado de X4UI para mostrar listas masivas (cientos o miles de elementos). En lugar de instanciar miles de componentes y saturar la memoria, utiliza **Reciclaje de Vistas (View Recycling)**: solo instancia y renderiza los componentes que son actualmente visibles en la pantalla. A medida que el usuario hace scroll, los componentes que salen por arriba se reciclan y se rellenan con los datos que entran por abajo.
+## 1. `GuiVirtualList<T>`
 
-### Implementación Responsiva
-
-Para que las filas de una lista virtual se escalen correctamente bajo el estándar de `FlexLayout`, debes asegurarte de dos cosas:
-1. El `GuiVirtualList` debe recibir un tamaño (mediante `.withPercentWidth()`).
-2. Las filas generadas por tu lambda **deben** solicitar heredar ese tamaño devolviendo su componente con `.withPercentWidth(1.0f)`.
-
-### Ejemplo Práctico:
+Implementa **reciclaje de vistas (*View Recycling*)**: solo instancia y dibuja las filas visibles en el viewport actual, manteniendo uso constante de memoria incluso con miles de registros:
 
 ```java
-import com.x4yi.x4ui.client.gui.component.GuiVirtualList;
-import com.x4yi.x4ui.client.gui.component.GuiLabel;
-
-// Definición de tu modelo de datos
-class MyItem {
-    public String name;
-    public MyItem(String name) { this.name = name; }
+class Entry {
+    final String name;
+    Entry(String name) { this.name = name; }
 }
 
-// 1. Instanciar pasándole el Alto por fila (ej. 24px) y los lambdas de construcción y enlazado.
-GuiVirtualList<MyItem> virtualList = (GuiVirtualList<MyItem>) new GuiVirtualList<MyItem>(
-    0, 0, 0, 300, 24,
-    // Constructor (se llama solo para los elementos visibles iniciales):
-    (MyItem item) -> {
-        // MUY IMPORTANTE: La fila debe tener width porcentual 1.0f para llenar el panel
-        return new GuiLabel(0, 0, 0, 20, "", null).withPercentWidth(1.0f);
-    },
-    // Binder (se llama constantemente al hacer scroll para rellenar datos):
-    (GuiComponent comp, MyItem item) -> {
-        GuiLabel label = (GuiLabel) comp;
-        label.setText(item.name);
-    }
-).withPercentWidth(1.0f); // El VirtualList en sí también toma el 100% de su padre.
+GuiVirtualList<Entry> list = (GuiVirtualList<Entry>) new GuiVirtualList<Entry>(
+    0, 0, 0, 240, 24,
+    // Builder: instancia una fila visible (debe usar withPercentWidth(1.0f))
+    item -> new GuiLabel(0, 0, item.name, 0xFFE6E8EC).withPercentWidth(1.0f),
+    // Binder: actualiza la fila reciclada al hacer scroll
+    (comp, item) -> ((GuiLabel) comp).setText(item.name)
+).withPercentWidth(1.0f);
 
-// Llenarlo con 1000 elementos
-List<MyItem> thousandItems = new ArrayList<>();
-for (int i = 0; i < 1000; i++) {
-    thousandItems.add(new MyItem("Fila " + i));
-}
-virtualList.setItems(thousandItems);
+list.setItems(entries);
 ```
 
-> [!CAUTION]
-> **El Ancho Cero (0 Width) en Filas Virtuales**
-> Si olvidas poner `.withPercentWidth(1.0f)` en la raíz del componente que devuelve el lambda constructor, la fila heredará el ancho absoluto inicial (`0` en el ejemplo superior) y se volverá totalmente invisible, dejándote con una lista aparentemente vacía aunque los datos estén allí.
+---
+
+## 2. `GuiDropdown<T>`
+
+Selector desplegable enlazado a un `State<T>` y a una lista de opciones:
+
+```java
+State<String> selectedMode = new State<>("Normal");
+List<String> modes = Arrays.asList("Normal", "Compacto", "Avanzado");
+
+GuiDropdown<String> dropdown = (GuiDropdown<String>) new GuiDropdown<>(
+    0, 0, 0, 22, selectedMode, modes
+).withPercentWidth(1.0f);
+```
+
+---
+
+## 3. `GuiMarkdown`
+
+Renderiza texto enriquecido (encabezados, listas, código, enlaces y separadores) respetando el ancho del contenedor y la fuente asignada:
+
+```java
+GuiMarkdown docView = (GuiMarkdown) new GuiMarkdown(0, 0, 0, "# Guía\nContenido **enriquecido**.")
+    .withFont("roboto_regular")
+    .withPercentWidth(1.0f);
+```
+
+---
+
+## 4. `GuiModelRender` y `GuiTooltip`
+
+- **`GuiModelRender`:** renderiza entidades (`setEntity`) o ítems (`setItemStack`) en 3D limpiando el buffer de profundidad de forma segura (`IGraphics.clearDepthBuffer()`), con soporte de escala (`setScale`), rotación (`setRotation`) y arrastre (`setAllowDragRotation`).
+- **`GuiTooltip`:** componente de tooltip flotante configurable también mediante `.withTooltip(...)` en cualquier `GuiComponent`.
+
+---
+
+## 5. Qué Evitar en Componentes Avanzados
+
+| Antipatrón | Causa Técnica del Problema | Solución Correcta |
+| :--- | :--- | :--- |
+| Omitir `.withPercentWidth(1.0f)` en el lambda builder de `GuiVirtualList` | La fila conserva ancho `0` y no se renderiza | Devolver el componente raíz de cada fila con `.withPercentWidth(1.0f)` |
+| Instanciar miles de `GuiPanel` en `GuiScrollPanel` para datos tabulares | Satura memoria y tiempo de layout | Utilizar `GuiVirtualList<T>` con reciclaje de vistas |

@@ -1,35 +1,79 @@
-# Containers and Panels
+# Containers & Panels (`GuiPanel`, `GuiCard`, `GuiScrollPanel`, `GuiSlot`)
 
-Containers are the structural building blocks of X4UI. Their primary purpose is to host other components and manage their arrangement using `FlexLayout`.
+Containers structure the visual hierarchy, arrange children through `ILayoutManager` (`FlexLayout`), and enforce hardware clipping bounds.
 
-## GuiPanel
+---
 
-The basic quintessential container. By default, it does not draw a background unless explicitly assigned a `GuiSprite` or if it has a theme with a background panel assigned.
+## 1. `GuiPanel` & Semantic Builders
+
+`GuiPanel` is the base structural container. In `r1.0b6` it provides static semantic factories aligned with the responsive standard:
 
 ```java
-import com.x4yi.x4ui.client.gui.component.layout.FlexDirection;
+// Vertical stack (VERTICAL, hugContent=true, 100% width)
+GuiPanel column = GuiPanel.column(8);
 
-GuiPanel panel = new GuiPanel(0, 0, 0, 0).withPercentWidth(1.0f);
-panel.setFlexDirection(FlexDirection.VERTICAL); // Stack vertically
-panel.setGap(5); // 5 pixels of spacing
-panel.setPadding(new Insets(10)); // 10 pixels of internal padding
+// Horizontal row (HORIZONTAL, 100% width) with flexible spacer
+GuiPanel row = GuiPanel.row(8);
+row.addChild(new GuiLabel(0, 0, "Title", 0xFFFFFFFF));
+row.addChild(GuiPanel.spacer());
+row.addChild(new GuiButton(0, 0, 20, 20, "X", this::closeScreen));
+
+// Themed card with padding and automatic hugContent height
+GuiPanel card = GuiPanel.card(10, 6);
 ```
 
-## GuiScrollPanel
-
-This panel includes all the behavior of `GuiPanel` but encapsulates its children within a **scrolling viewport**. It possesses its own sub-container called `contentPanel`.
-
-### The Width Rule in GuiScrollPanel
-By a principle of Layout responsibility, the internal `contentPanel` automatically inherits 100% of the width (`.withPercentWidth(1.0f)`) from its constructor if its parent `GuiScrollPanel` receives a width.
-Even so, when initializing the parent responsively, the correct syntax is:
+Manual layout configuration is also supported via `FlexDirection`, `FlexAlign`, and `Insets`:
 
 ```java
-GuiScrollPanel scroll = (GuiScrollPanel) new GuiScrollPanel(0, 0, 0, 250).withPercentWidth(1.0f);
-scroll.getContentPanel().setFlexDirection(FlexDirection.VERTICAL); // Configure internal layout
+GuiPanel panel = new GuiPanel(0, 0, 0, 0).withPercentWidth(1.0f);
+panel.setFlexDirection(FlexDirection.VERTICAL);
+panel.setGap(6);
+panel.setPadding(new Insets(10));
+```
 
-scroll.addChild(card1); // Note: GuiScrollPanel redirects addChildren to its contentPanel
+---
+
+## 2. `GuiCard`
+
+`GuiCard` extends `GuiPanel` with a built-in header label (`getTitleLabel()`) styled by the active theme:
+
+```java
+GuiCard card = (GuiCard) new GuiCard(0, 0, 0, 120, "Statistics")
+    .withPercentWidth(1.0f);
+```
+
+---
+
+## 3. `GuiScrollPanel`
+
+`GuiScrollPanel` wraps an internal `contentPanel` inside a scissored viewport with normalized scroll wheel support (`UIInput`):
+
+```java
+// Recommended: preconfigured vertical scroll panel
+GuiScrollPanel scroll = GuiScrollPanel.vertical(220, 6);
+scroll.addChild(card1); // addChild() forwards to contentPanel
 scroll.addChild(card2);
 ```
 
-> [!WARNING]
-> Do not confuse `scroll.setFlexDirection(...)` with `scroll.getContentPanel().setFlexDirection(...)`. The former affects how the outer panel arranges its elements (usually useless, since its only direct internal child is the `contentPanel`), while the latter defines how the elements you add to the scroll are organized.
+When content overflows the viewport height, `GuiScrollPanel` reserves scrollbar width automatically to prevent right-edge clipping.
+
+---
+
+## 4. `GuiSlot`
+
+`GuiSlot` integrates a vanilla inventory `Slot` inside `GuiBaseContainer`:
+
+```java
+for (Slot slot : inventorySlots.inventorySlots) {
+    rootPanel.addChild(new GuiSlot(slot, this));
+}
+```
+
+---
+
+## 5. What to Avoid with Containers
+
+| Anti-Pattern | Technical Root Cause | Correct Approach |
+| :--- | :--- | :--- |
+| Calling `scroll.setFlexDirection(...)` instead of `scroll.getContentPanel().setFlexDirection(...)` | Configures the outer viewport wrapper instead of the inner content container | Use `GuiScrollPanel.vertical(...)` or configure `getContentPanel()` |
+| Placing tall lists or forms directly in `GuiPanel` without `GuiScrollPanel` | Content clips off-screen at GUI Scale 3x and 4x | Wrap all tall vertical flows inside `GuiScrollPanel` |

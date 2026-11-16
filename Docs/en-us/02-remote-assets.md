@@ -1,20 +1,23 @@
 # 02 - Remote Assets & Asynchrony (`MediaPipeline`)
 
-This document explains how X4UI downloads, validates, and processes external media in the background using `MediaPipeline` and `MediaManager` without blocking the main render thread.
+This document details how X4UI downloads, validates, and processes external media in the background using `MediaPipeline` and `MediaManager` without blocking the main render thread.
 
-*(For ready-to-use UI widgets, see **Multimedia Components** in `components/multimedia.md`.)*
+*(For UI widget usage, see `components/multimedia.md`.)*
 
 ---
 
-## 1. The Decoupled Asynchrony Paradigm
+## 1. Problem & Design Decisions
 
-`MediaPipeline` is completely decoupled from the UI. It returns `CompletableFuture` promises so the caller decides **when** and **how** to update the interface.
+Downloading images or decoding video on the main thread freezes the Minecraft client. Likewise, bundling `ffmpeg` binaries inside `.minecraft/` causes permission issues, bloated installations, and OS-specific maintenance problems.
+
+X4UI addresses both issues with three design decisions:
+1. **Decoupled promise-based asynchrony:** `MediaPipeline` returns `CompletableFuture<File>` and never triggers global toast popups (`GuiToastManager`).
+2. **OS-level `ffmpeg` discovery (`MediaManager`):** X4UI locates `ffmpeg` installed on the user's operating system (**Linux, macOS, and Windows 10/11**) via `PATH` and standard system locations, falling back automatically to pure-Java **JCodec** when `ffmpeg` is unavailable.
+3. **Cache isolation & security (`SecurityUtils`):** Remote downloads are validated against SSRF and path traversal, then stored under `.minecraft/x4ui/cache/<modid>/`.
 
 ---
 
 ## 2. Using `MediaPipeline`
-
-To download or process external media in a per-mod sandboxed cache (`.minecraft/x4ui/cache/<modid>/`), invoke `MediaPipeline`:
 
 ```java
 import com.x4yi.x4ui.impl.client.media.MediaPipeline;
@@ -22,44 +25,44 @@ import com.x4yi.x4ui.impl.client.media.MediaPipeline;
 CompletableFuture<File> mediaFuture = MediaPipeline.getInstance().obtainMedia(
     "mymodid",
     "https://example.com/video.mp4",
-    (status, percent) -> System.out.println("Progress [" + status + "]: " + percent + "%")
+    (status, percent) -> {
+        // Progress callback (non-blocking)
+    }
 );
 
 mediaFuture.thenAccept(file -> {
-    System.out.println("Ready at: " + file.getAbsolutePath());
+    // Cached file ready for playback
 }).exceptionally(ex -> {
-    ex.printStackTrace();
+    // Explicit handling for network, validation, or codec errors
     return null;
 });
 ```
 
 ---
 
-## 3. OS-Level FFmpeg Discovery & Security
+## 3. Network & Filesystem Security (`SecurityUtils`)
 
-- **OS Binary Discovery (`MediaManager`):** Starting in `r1.0b6`, X4UI automatically locates `ffmpeg` installed on **Linux, macOS, and Windows 10/11** (`PATH` and standard OS locations) instead of downloading binaries into `.minecraft/`. If `ffmpeg` is unavailable, X4UI falls back to **JCodec** automatically.
-- **URL & Path Validation (`SecurityUtils`):** Remote downloads enforce HTTP/HTTPS, block local/private network addresses (SSRF protection), and prevent path traversal when writing cache files.
+Before executing downloads or writing cache files, `SecurityUtils` enforces:
+- `validateHttpUrl(...)`: restricts schemes to `http`/`https` and blocks loopback, link-local, and private network ranges (SSRF protection).
+- `resolveSafeChild(...)`: canonicalizes paths and rejects directory traversal (`..`) outside the mod's cache directory.
 
 ---
 
 ## 4. Supported Media Formats
 
-### PC (Windows, Linux, macOS)
-- **Video:** MP4, MKV, WebM, AVI, FLV
-- **Audio:** MP3, AAC, OGG, WAV, FLAC
+| Platform | Supported Video | Supported Audio | Notes |
+| :--- | :--- | :--- | :--- |
+| **PC (Linux, macOS, Windows 10/11)** | MP4, MKV, WebM, AVI, FLV | MP3, AAC, OGG, WAV, FLAC | Decoded via OS `ffmpeg` with automatic JCodec fallback. |
+| **Android (PojavLauncher, FoldCraft)** | **MP4 (H.264) only** | MP3, AAC | Use *Baseline* or *Main* profile. WebM/MKV fail on Android. |
 
-### Android (PojavLauncher, FoldCraft)
-- **Video:** **MP4 with H.264 encoding ONLY** (*Baseline* or *Main* profile). Attempting to play WebM or MKV on Android will fail.
-- If your mod uses `GuiVideo`, include an `.mp4` (H.264) fallback for mobile players.
+For cross-platform distribution with `GuiVideo`, provide an `.mp4` (H.264) fallback source.
 
 ---
 
-## 5. What To Avoid (Critical Anti-Patterns)
+## 5. What to Avoid with Remote Media
 
-> [!CAUTION]
-> **1. NEVER block the thread waiting for a `CompletableFuture`.**
-> Never call `future.join()` or `future.get()` inside `update()` or `render()`. Minecraft will freeze completely.
-
-> [!CAUTION]
-> **2. NEVER inject global Toasts from background managers.**
-> `MediaPipeline` must never reference `GuiToastManager`. Handle user notifications in your *Screen* callback or rely on `GuiVideo`'s built-in status display.
+| Anti-Pattern | Technical Root Cause | Correct Approach |
+| :--- | :--- | :--- |
+| Calling `future.join()` or `future.get()` in `update()` or `render()` | Blocks the Minecraft client thread until network/decoding finishes | Use `.thenAccept()` or rely on `GuiVideo` / `GuiImage` |
+| Invoking `GuiToastManager` from background managers | Couples I/O pipelines to global UI overlays | Render status inside `GuiVideo` or handle notifications in the screen callback |
+| Ignoring failure paths on external URLs | Unreachable hosts or unsupported codecs leave silent failures | Register `withOnError(...)` on `GuiVideo` and `.exceptionally(...)` on futures |

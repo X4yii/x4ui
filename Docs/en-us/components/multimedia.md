@@ -1,18 +1,18 @@
-# Multimedia Components (`GuiImage` & `GuiVideo`)
+# Multimedia Components (`GuiImage`, `GuiVideo`, `GuiAudio`, `GuiSprite`)
 
-X4UI's multimedia components manage asynchronous loading locally within their own bounds without blocking the render thread.
+Multimedia components encapsulate asynchronous loading on top of `MediaPipeline` and `MediaManager` within their own bounds, keeping the render thread non-blocking and avoiding global toast spam.
 
 ---
 
-## `GuiImage` (Static, Remote & 9-Slice Images)
+## 1. `GuiImage` (Local Assets, URLs & 9-Slice)
 
-`GuiImage` supports both packaged textures (`ResourceLocation`) and asynchronously downloaded remote images via `setUrl(String)`:
+`GuiImage` supports packaged textures (`ResourceLocation`), asynchronous remote URLs (`setUrl`), and protected 9-slice border scaling (`NineSliceConfig`):
 
 ```java
 GuiImage banner = (GuiImage) new GuiImage(0, 0, 0, 150).withPercentWidth(1.0f);
 banner.setUrl("https://example.com/banner.png");
 
-// Or with a local ResourceLocation and 9-slice border scaling
+// Or local asset with 9-slice borders
 banner.setResource(new ResourceLocation("mymod", "textures/gui/panel.png"));
 banner.withNineSlice(new NineSliceConfig(4, 4, 4, 4));
 banner.setNineSliceEnabled(true);
@@ -20,23 +20,37 @@ banner.setNineSliceEnabled(true);
 
 ---
 
-## `GuiVideo` (Asynchronous Video Player)
+## 2. `GuiVideo` (Asynchronous Player & Error Handling)
 
-`GuiVideo` plays video and audio asynchronously on top of `MediaPipeline` (using OS-discovered `ffmpeg` or JCodec fallback), with built-in status display, optional controls, and error handling:
+`GuiVideo` plays video and audio asynchronously (using OS-discovered `ffmpeg` or automatic JCodec fallback), featuring an integrated loading bar, optional playback controls, and visible error recovery:
 
 ```java
-GuiVideo introVideo = (GuiVideo) new GuiVideo(0, 0, 0, 240).withPercentWidth(1.0f);
+GuiVideo video = (GuiVideo) new GuiVideo(0, 0, 0, 240).withPercentWidth(1.0f);
 
-introVideo.setVideoUrl("https://example.com/my_intro.mp4");
-introVideo.setVolume(0.5f);
-introVideo.setControlsEnabled(true);
-introVideo.withOnError(err -> {
-    // Optional: react when download or decoding fails
-    System.err.println("Video error: " + err);
+video.setVideoUrl("https://example.com/intro.mp4");
+video.setVolume(0.5f);
+video.setControlsEnabled(true);
+video.withOnError(errorMsg -> {
+    // Optional handler for network, SSRF validation, or codec failures
 });
-introVideo.play();
+video.play();
 ```
 
-### Loading & Error Handling
-- While downloading or preparing media, `GuiVideo` renders an internal progress bar inside its bounds.
-- On network or codec failure, `GuiVideo` safely cleans up its resources, renders the diagnostic error state (`getVideoError()`), and invokes the `withOnError(...)` callback if registered.
+- While buffering or downloading, `GuiVideo` renders an internal progress bar.
+- On failure, it safely disposes resources, displays the diagnostic error state (`getVideoError()`), and invokes `withOnError(...)`.
+
+---
+
+## 3. `GuiAudio` & `GuiSprite`
+
+- **`GuiAudio`:** asynchronous remote audio playback with `setVolume(...)` and `setMuted(...)`.
+- **`GuiSprite`:** 2D sprite animation driven by `SpriteSheetSource` or `SequenceSource` with `withFPS(...)`, `withLoopMode(LoopMode.LOOP)`, and `withUVScrollSpeed(...)`.
+
+---
+
+## 4. What to Avoid with Multimedia
+
+| Anti-Pattern | Technical Root Cause | Correct Approach |
+| :--- | :--- | :--- |
+| Passing local/private network URLs | Rejected by `SecurityUtils` (SSRF and path traversal protection) | Use public HTTP/HTTPS URLs or `ResourceLocation` |
+| Omitting `withOnError(...)` or H.264 MP4 fallbacks | Leaves failures unhandled or breaks playback on Android launchers | Register `withOnError(...)` and provide `.mp4` (H.264) sources |

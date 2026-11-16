@@ -1,70 +1,83 @@
-# Buttons and Inputs
+# Buttons & Inputs (`GuiButton`, `GuiTextInput`, `GuiToggle`, `GuiSlider`)
 
-Primary interaction components are designed to fully leverage the **Fluent API** and eliminate the need to clutter the code with repetitive setter calls.
+Primary interactive widgets follow X4UI's reactive `State<T>` paradigm and `GuiComponent` fluent API, avoiding manual event boilerplate.
 
-## GuiButton
+---
 
-The classic interactive button. Secondary visual properties and variants are configured through fluent builders:
+## 1. `GuiButton`
+
+Interactive button with theme variants (`DEFAULT`, `PRIMARY`, `SECONDARY`, `SUCCESS`, `DANGER`, `GHOST`) and tooltip support:
 
 ```java
-GuiButton btn = (GuiButton) new GuiButton(0, 0, 0, 20, "Save", () -> {
-    System.out.println("Saved!");
+GuiButton saveBtn = (GuiButton) new GuiButton(0, 0, 0, 22, "Save", () -> {
+    // Click action
 })
-.withPercentWidth(1.0f)                           // Responsive sizing
-.withVariant(GuiButton.Variant.SUCCESS)            // Visual variant from theme (DEFAULT, PRIMARY, SECONDARY, SUCCESS, DANGER, GHOST)
-.withTooltip("Saves changes permanently");         // Instant hover tooltip
+    .withPercentWidth(1.0f)
+    .withVariant(GuiButton.Variant.PRIMARY)
+    .withTooltip("Saves the current configuration");
 ```
 
-## Text Inputs (GuiTextInput)
+---
 
-`GuiTextInput` internally handles focus, blinking cursor rendering, text selection, and clipboard operations.
+## 2. `GuiTextInput`
+
+Text field supporting focus management, cursor rendering, selection, clipboard operations, and two-way binding with `State<String>`:
 
 ```java
-GuiTextInput nameInput = (GuiTextInput) new GuiTextInput(0, 0, 0, 20, "")
+State<String> username = new State<>("");
+
+GuiTextInput input = (GuiTextInput) new GuiTextInput(0, 0, 0, 20, username)
+    .setSubmitKey(KeyCodes.ENTER)
+    .onEnter(() -> submitForm(username.get()))
+    .setOnTextChanged(txt -> {
+        // Optional per-keystroke hook
+    })
     .withPercentWidth(1.0f);
 
-// Configure placeholder
-nameInput.setPlaceholder("Enter your name...");
-
-// Listen for text changes
-nameInput.setOnTextChanged(text -> {
-    System.out.println("Current text: " + text);
-});
+input.setPlaceholder("Username...");
 ```
 
-### Reactive States
-To bind `GuiTextInput` to a reactive `State<String>`:
+---
+
+## 3. `GuiToggle`
+
+Boolean switch bound either to a `State<Boolean>` or an explicit `Consumer<Boolean>`:
 
 ```java
-State<String> userName = new State<>("");
-nameInput.bindState(userName, txt -> {
-    nameInput.setText(txt);
-});
-```
+State<Boolean> showHud = new State<>(true);
 
-## Sliders and Toggles
-
-### Numeric Sliders (`GuiSliderInt`, `GuiSliderFloat`, `GuiSliderDouble`)
-
-Allow continuous value adjustments via mouse drag or keyboard navigation:
-
-```java
-GuiSliderInt volumeSlider = (GuiSliderInt) new GuiSliderInt(0, 0, 0, 20, 0, 100, 50, "Volume: ")
+// Direct reactive binding
+GuiToggle toggle = (GuiToggle) new GuiToggle(0, 0, 0, 20, "Show HUD", showHud)
     .withPercentWidth(1.0f);
 
-volumeSlider.setOnValueChanged(val -> {
-    System.out.println("New volume: " + val);
+// Or explicit initial value + callback
+GuiToggle altToggle = new GuiToggle(0, 0, 140, 20, "Compact Mode", false, enabled -> {
+    // Explicit handler
 });
 ```
 
-### Switches and Checkboxes (`GuiToggle`)
+---
 
-`GuiToggle` provides a smooth, animated boolean switch with label support:
+## 4. Typed Sliders (`GuiSliderInt`, `GuiSliderFloat`, `GuiSliderDouble`)
+
+Sliders bind directly to a typed `State<T>` with `min`, `max`, and `step`:
 
 ```java
-GuiToggle showHUD = (GuiToggle) new GuiToggle(0, 0, 120, 20, "Show HUD", true);
+State<Integer> volume = new State<>(50);
 
-showHUD.setOnToggle(enabled -> {
-    System.out.println("HUD enabled: " + enabled);
-});
+GuiSliderInt volumeSlider = (GuiSliderInt) new GuiSliderInt(
+    0, 0, 0, 20, volume, 0, 100, 1
+).withPercentWidth(1.0f);
 ```
+
+`GuiSliderFloat` and `GuiSliderDouble` follow the same reactive constructor pattern.
+
+---
+
+## 5. What to Avoid with Inputs
+
+| Anti-Pattern | Technical Root Cause | Correct Approach |
+| :--- | :--- | :--- |
+| Passing `org.lwjgl.input.Keyboard` constants to `setSubmitKey(...)` | Breaks portability under CleanroomMC (LWJGL 3) | Use `KeyCodes.ENTER` and constants from `KeyCodes` |
+| Dividing by `mc.displayWidth` directly in custom widgets | Triggers division by zero when the window is minimized | Use `UIInput.safeMouseX(...)` / `safeMouseY(...)` |
+| Mirroring widget values in plain local fields outside `State<T>` | Desynchronizes the UI when server batches update state | Bind widgets directly to `State<T>` |

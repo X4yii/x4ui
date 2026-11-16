@@ -1,12 +1,21 @@
 # 05 - Graphics Abstraction & Rendering (`IGraphics`)
 
-X4UI r1.0b5 introduces the `IGraphics` immediate graphics abstraction layer. This layer decouples component rendering from raw OpenGL and LWJGL calls, deterministically managing the matrix stack, opacity, color tinting, active fonts, and hardware scissoring.
+This document describes the immediate rendering contract `IGraphics` (`com.x4yi.x4ui.api.client.gui.IGraphics`) and its `GLGraphics` backend, isolating UI components from direct OpenGL and LWJGL calls.
 
 ---
 
-## 1. The Immediate Graphics Context
+## 1. Problem & Design Decisions
 
-Every visual component receives an `IGraphics` instance inside its `renderSelf()` method:
+Issuing raw `GL11`, `GlStateManager`, or `Tessellator` calls inside widgets corrupts shared OpenGL state (blending, depth, scissor, matrices) and breaks portability between **Forge 1.12.2 (LWJGL 2)** and **CleanroomMC (LWJGL 3)**.
+
+X4UI encapsulates all drawing behind `IGraphics`:
+1. **Deterministic state stack:** Every `save()`, `pushAlpha()`, `pushColorTint()`, and `pushClip()` call is tracked and restored cleanly.
+2. **Nested hardware clipping (`ScissorHelper`):** `pushClip()` intersects new bounds with the parent's active clip rectangle so nested scroll panels never bleed outward.
+3. **Portable primitives:** Rounded geometry, gradients, BGRA texture uploads, and depth buffer clearing (`clearDepthBuffer()`) live inside `GLGraphics` without exposing OpenGL to widgets.
+
+---
+
+## 2. Graphics Context in `renderSelf()`
 
 ```java
 @Override
@@ -14,110 +23,84 @@ protected void renderSelf(IGraphics gfx, int mouseX, int mouseY, float partialTi
     int absX = getAbsoluteX();
     int absY = getAbsoluteY();
 
-    // Render background and border
     gfx.drawRect(absX, absY, width, height, 0xFF1E1E28);
     gfx.drawBorder(absX, absY, width, height, 1, 0xFF3E3E50);
-
-    // Draw text with the active font
     gfx.drawString("Control Panel", absX + 8, absY + 6, 0xFFFFFFFF, true);
 }
 ```
 
 ---
 
-## 2. Hierarchical State Stack
+## 3. Hierarchical State Stack
 
-`IGraphics` maintains an internal stack preserving and restoring transformations and visual attributes:
-
-### Matrix Save and Restore (`save()` / `restore()`)
-Allows local coordinate transformations without leaking into sibling or parent components:
+### Matrix Transforms (`save()` / `restore()`)
 
 ```java
 gfx.save();
 gfx.translate(absX + 50, absY + 50);
 gfx.scale(1.5f, 1.5f);
-// Render scaled content...
-gfx.restore(); // Restores matrix and attributes
+// Transformed draw calls...
+gfx.restore();
 ```
 
-### Alpha Opacity Modulation (`pushAlpha()` / `popAlpha()`)
-Multiplies global opacity across all subsequent draw calls:
+### Opacity & Color Tint (`pushAlpha()` / `pushColorTint()`)
 
 ```java
-gfx.pushAlpha(0.5f); // 50% cumulative opacity
-gfx.drawRect(absX, absY, 100, 100, 0xFF00FF00);
-gfx.drawString("Translucent text", absX, absY, 0xFFFFFFFF, false);
-gfx.popAlpha(); // Restores previous alpha
-```
-
-### Color Tint Modulation (`pushColorTint()` / `popColorTint()`)
-Applies multiplicative ARGB color tinting:
-
-```java
-gfx.pushColorTint(0xFFFF8888); // Reddish tint
+gfx.pushAlpha(0.5f);
+gfx.pushColorTint(0xFFFF8888);
 gfx.drawTexture(myTexture, absX, absY, 64, 64);
 gfx.popColorTint();
+gfx.popAlpha();
 ```
 
 ### Hardware Scissor Clipping (`pushClip()` / `popClip()`)
-Restricts rendering to a bounding box using OpenGL scissor testing with automatic intersection:
 
 ```java
 gfx.pushClip(absX, absY, width, height);
-// Any rendering outside this box will be discarded by the GPU
 renderOverflowingContent(gfx);
 gfx.popClip();
 ```
 
 ---
 
-## 3. Drawing Primitives Catalog
+## 4. Drawing Primitives Catalog
 
 | Method | Purpose |
-|--------|---------|
-| `drawRect(x, y, w, h, color)` | Solid filled rectangle with ARGB color |
-| `drawRoundedRect(x, y, w, h, radius, color)` | Rectangle with smooth rounded corners |
-| `drawBorder(x, y, w, h, thickness, color)` | Rectangular border stroke |
-| `drawRoundedBorder(x, y, w, h, radius, thickness, color)` | Rounded rectangular border stroke |
-| `drawLine(x1, y1, x2, y2, thickness, color)` | Continuous 2D line segment |
-| `drawCircle(centerX, centerY, radius, color)` | Anti-aliased filled circle |
-| `drawGradient(x, y, w, h, topColor, bottomColor)` | 2-color vertical linear gradient |
-| `drawGradient4Corners(x, y, w, h, tl, tr, br, bl)` | 4-corner bilinear gradient |
-| `drawString(text, x, y, color, shadow)` | Text rendering using active `IFont` |
-| `drawTexture(texture, x, y, w, h)` | Full texture quad stretched to dimensions |
-| `drawTexturedRect(x, y, w, h, u1, v1, u2, v2)` | Sub-region texture mapped via UV coordinates |
+| :--- | :--- |
+| `drawRect(x, y, w, h, color)` | Solid ARGB rectangle. |
+| `drawRoundedRect(x, y, w, h, radius, color)` | Rounded-corner rectangle. |
+| `drawBorder(x, y, w, h, thickness, color)` | Rectangular border with configurable thickness. |
+| `drawRoundedBorder(x, y, w, h, radius, thickness, color)` | Rounded outer border. |
+| `drawLine(x1, y1, x2, y2, thickness, color)` | Line segment between two points. |
+| `drawCircle(centerX, centerY, radius, color)` | Filled circle. |
+| `drawGradient(x, y, w, h, topColor, bottomColor)` | Vertical two-color gradient. |
+| `drawGradient4Corners(x, y, w, h, tl, tr, br, bl)` | Bilinear per-corner gradient. |
+| `drawString(text, x, y, color, shadow)` | Text rendering with the active `IFont`. |
+| `drawTexture(texture, x, y, w, h)` | Full texture stretched to bounds. |
+| `drawTexturedRect(x, y, w, h, u1, v1, u2, v2)` | UV-mapped subregion of the bound texture. |
+| `clearDepthBuffer()` | Safe depth buffer clear (e.g. for 3D models). |
 
 ---
 
-## 4. Active Typography
+## 5. Active Typography on `IGraphics`
 
-The `IGraphics` context propagates the currently active font (`IFont`). If a parent sets a font, all children inherit it automatically:
+`IGraphics` propagates the active `IFont` for text measurement and rendering:
 
 ```java
-IFont customFont = FontRegistry.get("roboto_medium");
+IFont customFont = FontRegistry.get("roboto_regular");
 gfx.setFont(customFont);
 
-int textW = gfx.getStringWidth("Hello World");
+int textW = gfx.getStringWidth("Sample Text");
 int textH = gfx.getFontHeight();
-gfx.drawString("Hello World", absX, absY, 0xFFFFFFFF, true);
+gfx.drawString("Sample Text", absX, absY, 0xFFFFFFFF, true);
 ```
 
 ---
 
-## What to Avoid (Critical Rendering Pitfalls)
+## 6. What to Avoid in Rendering
 
-> [!CAUTION]
-> **1. NEVER emit custom graphic primitives in Clockwise (CW) winding order.**
-> Always use the provided `IGraphics` methods. Otherwise, OpenGL will classify your polygons as back-faces and silently discard them.
-
-> [!WARNING]
-> **2. NEVER leave `save()`, `pushClip()`, or `pushAlpha()` stacks unbalanced.**
-> Always pair stack pushes with corresponding pops, ideally within `try ... finally` blocks, to avoid corrupting the render context of other components.
-
-> [!WARNING]
-> **3. NEVER manipulate raw OpenGL states without restoring them.**
-> If you enable states like `GL_DEPTH_TEST` in `renderSelf()`, you must restore the original state before returning.
-
-> [!IMPORTANT]
-> **4. NEVER recompute complex geometric shapes every frame.**
-> Cache expensive geometric models and update them only when data changes.
+| Anti-Pattern | Technical Root Cause | Correct Approach |
+| :--- | :--- | :--- |
+| Direct `GL11`, `GL12`, or `Tessellator` calls inside widgets | Desynchronizes internal render state and breaks LWJGL 2/3 portability | Use `IGraphics` methods exclusively |
+| Unbalanced `save()`, `pushClip()`, `pushAlpha()`, or `pushColorTint()` | Corrupts transforms and clipping for subsequent components | Always pair every `push`/`save` with its `pop`/`restore` |
+| Recomputing complex geometry or word-wrapping large text every frame | Wastes CPU cycles and degrades frame rate | Cache computed geometry/text lines and update only when source data changes |

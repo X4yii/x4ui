@@ -1,54 +1,97 @@
-# 07 - Overlay Injection & GuiContainerAnchor
+# 07 - GUI Overlays & Screen Injection (`IGuiOverlay`)
 
-This document describes the architecture of Overlays (HUDs, Toasts, global notifications) in X4UI and how they hook into the Minecraft Forge rendering loop.
-
----
-
-## 1. The Fixed Positioning Problem
-
-If an individual manager (like the `GuiToastManager`) wants to animate its toasts from the center of the screen or slide them smoothly between each other, a strict manager would force the toasts to suddenly snap back to a fixed corner every time the user resizes the screen, causing severe visual flickering.
+This document describes X4UI's overlay injection architecture (`IGuiOverlay`, `GuiOverlayManager`, `OverlayDockManager`, and `ContainerAnchor`), enabling non-intrusive panels over vanilla or third-party screens without bytecode hooks.
 
 ---
 
-## 2. The Solution: GuiContainerAnchor.FULLSCREEN
+## 1. Problem & Design Decisions
 
-To solve this jurisdictional clash, X4UI employs the structural anchor `GuiContainerAnchor.FULLSCREEN`.
+Patching vanilla or modded screens via mixins/ASM to add side panels causes mod conflicts, desynchronized `guiLeft`/`guiTop` offsets, and overlap with JEI panels.
 
-When an Overlay or an Overlay Manager returns `FULLSCREEN` instead of a static corner, the master manager (`OverlayDockManager`) **yields 100% control of its coordinates and dimensions** to it.
+X4UI solves this through:
+1. **Event-driven declarative injection (`GuiOverlayManager`):** Listens to Forge screen events (`GuiOpenEvent`, `InitGuiEvent`, `DrawScreenEvent`, `MouseInputEvent`, `KeyboardInputEvent`) and activates overlays where `matches(screen)` returns `true`.
+2. **Anchor-based docking (`ContainerAnchor`):** `OverlayDockManager` computes positions relative to a `GuiContainer` (`CONTAINER_LEFT`, `CONTAINER_RIGHT`, `CONTAINER_TOP`, `CONTAINER_BOTTOM`) or the logical viewport (`WINDOW_TOP_LEFT`, `SCREEN_CENTER`, `FULLSCREEN`), stacking multiple overlays without overlap.
+3. **Automatic exclusion areas:** `getExclusionAreas()` reports occupied rectangles so `JeiPlugin` shifts recipe/item grids automatically.
 
-This means the Overlay will logically span the entire screen and can position its children freely, solving the repositioning glitch forever.
+---
 
-### Example: Creating a Flicker-Free Manager
+## 2. `IGuiOverlay` Contract & `ContainerAnchor`
+
+| Anchor (`ContainerAnchor`) | Behavior |
+| :--- | :--- |
+| `CONTAINER_LEFT` / `CONTAINER_RIGHT` | Docks beside a `GuiContainer` using `guiLeft` and `xSize`. |
+| `CONTAINER_TOP` / `CONTAINER_BOTTOM` | Docks above or below the container bounds. |
+| `WINDOW_TOP_LEFT` / `TOP_RIGHT` / `BOTTOM_LEFT` / `BOTTOM_RIGHT` | Anchors relative to logical viewport corners. |
+| `SCREEN_CENTER` | Centers the root component in the viewport. |
+| `FULLSCREEN` | Grants full coordinate and dimension control to the overlay (suited for free-form animated managers or toasts). |
+
+### Implementation Example
 
 ```java
-import com.x4yi.x4ui.client.gui.overlay.GuiOverlay;
-import com.x4yi.x4ui.client.gui.overlay.GuiContainerAnchor;
+package com.example.mymod.client.overlay;
 
-public class MyCustomToastManager extends GuiOverlay {
+import com.x4yi.x4ui.client.gui.component.GuiButton;
+import com.x4yi.x4ui.client.gui.component.GuiComponent;
+import com.x4yi.x4ui.client.gui.component.GuiPanel;
+import com.x4yi.x4ui.client.gui.overlay.ContainerAnchor;
+import com.x4yi.x4ui.client.gui.overlay.IGuiOverlay;
+import com.x4yi.x4ui.client.gui.overlay.OverlayContext;
+import net.minecraft.client.gui.GuiScreen;
+import net.minecraft.client.gui.inventory.GuiContainer;
 
-    public MyCustomToastManager() {
-        super(GuiContainerAnchor.FULLSCREEN); // <-- The key to total freedom!
+public class ContainerSideOverlay implements IGuiOverlay {
+
+    private GuiPanel root;
+
+    @Override
+    public String getId() {
+        return "mymod:side_tools";
     }
 
     @Override
-    public void renderOverlay(IGraphics gfx, int mouseX, int mouseY, float partialTicks) {
-        // Since it's FULLSCREEN, this.width and this.height equal the full screen.
-        // Here you can animate your custom popups freely.
+    public boolean matches(GuiScreen screen) {
+        return screen instanceof GuiContainer;
+    }
+
+    @Override
+    public void init(GuiScreen screen, OverlayContext context) {
+        root = GuiPanel.card(6, 4);
+        root.setSize(80, 32);
+        root.addChild(new GuiButton(0, 0, 0, 20, "Sort", () -> {}).withPercentWidth(1.0f));
+    }
+
+    @Override
+    public GuiComponent getRootComponent() {
+        return root;
+    }
+
+    @Override
+    public ContainerAnchor getAnchor() {
+        return ContainerAnchor.CONTAINER_RIGHT;
     }
 }
 ```
 
 ---
 
-## 3. Injection into the Forge Event Bus
+## 3. Client Registration
 
-For X4UI to draw your overlay on top of the native Minecraft HUD, you must register it using `GuiOverlayRegistry` during the client initialization:
+Register the overlay during client initialization (`ClientProxy` / `FMLInitializationEvent`):
 
 ```java
-import com.x4yi.x4ui.client.gui.overlay.GuiOverlayRegistry;
+import com.x4yi.x4ui.client.gui.overlay.GuiOverlayManager;
 
-// Register the manager during FMLInitializationEvent (Client Side only)
-GuiOverlayRegistry.register(new MyCustomToastManager());
+GuiOverlayManager.INSTANCE.registerOverlay(new ContainerSideOverlay());
 ```
 
-The registry automatically handles subscribing to Forge's `RenderGameOverlayEvent.Post` event and ensures that `update()` ticks are called properly every frame so your `GuiAnimator` animations keep running smoothly even outside of a `GuiScreen`.
+`GuiOverlayManager` is automatically registered on the Forge event bus by `ClientProxy`, handling `init`, `update`, `renderBackground`, `renderForeground`, input routing, and `onClosed` (which calls `root.destroy()`).
+
+---
+
+## 4. What to Avoid in Overlays
+
+| Anti-Pattern | Technical Root Cause | Correct Approach |
+| :--- | :--- | :--- |
+| Hardcoding `guiLeft` or fixed offsets in `renderForeground()` | Breaks across different container sizes and GUI scales | Choose a `ContainerAnchor` and let `OverlayDockManager` position it |
+| Returning empty `getExclusionAreas()` for inventory-adjacent panels | JEI item lists draw directly over the overlay | Keep the default `IGuiOverlay.getExclusionAreas()` behavior |
+| Retaining `GuiScreen` references after `onClosed()` | Prevents garbage collection of closed screens | Release screen references in `onClosed(GuiScreen)` and rely on `root.destroy()` |

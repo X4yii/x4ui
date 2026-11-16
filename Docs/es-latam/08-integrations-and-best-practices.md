@@ -1,55 +1,51 @@
 # 08 - Integraciones y Mejores Prácticas
 
-Este documento detalla las directrices estandarizadas para trabajar con X4UI en proyectos de gran escala, evitando deuda arquitectónica y garantizando consistencia.
+Este documento reúne las convenciones arquitectónicas de X4UI (`r1.0b6`), su integración nativa con Just Enough Items (JEI) y las reglas de diseño recomendadas para mods consumidores.
 
 ---
 
-## 1. Reglas de Nomenclatura (Naming Conventions)
+## 1. Integración Nativa con JEI (`JeiPlugin`)
 
-Para mantener la claridad arquitectónica y evitar el síndrome del "God Object", el prefijo `Gui` en X4UI está estrictamente reservado para **componentes visuales evidentes** que heredan de `GuiComponent`.
-
-### Lo que SÍ debe llamarse `Gui`
-- Componentes interactivos: `GuiButton`, `GuiTextField`, `GuiCheckbox`.
-- Contenedores de layouts: `GuiPanel`, `GuiScrollPanel`, `GuiVirtualList`.
-- Gráficos y multimedia: `GuiImage`, `GuiVideo`, `GuiSprite`.
-
-### Lo que NO debe llamarse `Gui` (Antipatrón)
-- Gestores y Controladores: No llames `GuiToastManager` a un gestor de colas si éste no se dibuja a sí mismo. Lrámalo `ToastManager`. *(Nota: si el gestor hereda de `GuiOverlay` y renderiza contenido en pantalla de forma autónoma, el prefijo `Gui` sí es justificable).*
-- Estructuras de Datos y Estados: `UIStateBus` no se llama `GuiStateBus`. `State<T>` no se llama `GuiState`.
-- Modelos de Red: No llames `GuiPacket` a un paquete de sincronización.
+X4UI registra `JeiPlugin` y `JeiAdvancedGuiHandler` automáticamente cuando JEI está presente en tiempo de ejecución:
+- Reporta áreas de exclusión de `GuiBaseContainer` y de todos los `IGuiOverlay` activos en `GuiOverlayManager`.
+- Evita que el panel lateral de ingredientes de JEI se superponga sobre paneles inyectados o ventanas modales extendidas.
+- No requiere configuración manual adicional salvo implementar correctamente `getExclusionAreas()` cuando se creen overlays personalizados.
 
 ---
 
-## 2. Inyección de Dependencias y Modelos
+## 2. Convenciones de Nomenclatura y Arquitectura
 
-Nunca pases objetos gigantes del juego (como el jugador entero, mundos o bases de datos) directamente al constructor de los componentes visuales.
-Las Vistas (Views) deben ser estúpidas (*Dumb Views*) y reactivas.
+El prefijo `Gui` está reservado para **componentes visuales** que heredan de `GuiComponent` o pantallas (`GuiBaseScreen`, `GuiBaseContainer`, `IGuiOverlay`):
 
-**Antipatrón (Acoplamiento Fuerte):**
-```java
-GuiPanel playerStats = new GuiPlayerStatsPanel(Minecraft.getMinecraft().player);
-```
+| Categoría | Nomenclatura Correcta | Qué Evitar |
+| :--- | :--- | :--- |
+| Widgets y Contenedores | `GuiButton`, `GuiTextInput`, `GuiToggle`, `GuiPanel`, `GuiScrollPanel` | Nombres genéricos sin rol visual claro |
+| Gestores sin renderizado propio | `OverlayDockManager`, `MediaManager`, `ScreenRegistry` | Prefijar con `Gui` clases puramente lógicas |
+| Estado y Red | `State<T>`, `UIStateBus`, `UINetwork`, `PacketGuiRpc`, `ActionGuard` | Mezclar estado/paquetes con clases `client.gui.*` |
 
-**Buena Práctica (Reactivo, Desacoplado):**
-Pasa contenedores de estado reactivo o utiliza el `UIStateBus`.
+---
+
+## 3. Desacoplamiento de Vistas (*Dumb Views*)
+
+Los componentes visuales no deben recibir objetos pesados del mundo (`World`, `EntityPlayer`, `TileEntity`) en sus constructores cuando solo necesitan mostrar o editar datos puntuales. Pasar `State<T>` o usar `UIStateBus` desacopla la vista del modelo y facilita el soporte server-optional:
 
 ```java
-State<PlayerStatsData> stats = new State<>(new PlayerStatsData());
-GuiPanel playerStats = new PlayerStatsPanel(stats); // El panel se suscribe internamente
+// Recomendado: vista desacoplada mediante State<T>
+public class EnergyCard extends GuiPanel {
+    public EnergyCard(State<Integer> energyState) {
+        super(0, 0, 0, 40);
+        GuiLabel label = new GuiLabel(0, 0, "0 RF", 0xFFFFFFFF);
+        label.bindState(energyState, rf -> label.setText(rf + " RF"));
+        addChild(label);
+    }
+}
 ```
 
 ---
 
-## 3. Prácticas de Inicialización
+## 4. Gestión de Memoria y Ciclo de Vida
 
-Al crear un `Screen` completo en Minecraft que utilice X4UI, instancia tus componentes una sola vez en el constructor o en un método de inicialización llamado *antes* de adjuntarlo a la pantalla.
-
-Nunca inicies descargas pesadas del `MediaPipeline` dentro de `update()` o `render()`. Hazlo en la fase de inicialización.
-
----
-
-## 4. Auditorías de Memoria
-
-Recuerda que en Java 8, abusar de lambdas sin cuidado (capturando referencias del `Screen` entero) puede evitar que el Garbage Collector libere pantallas cerradas.
-- Usa `bindState` siempre en los componentes, ya que X4UI los desvinculará automáticamente cuando el componente sea destruido al cerrar el `Screen`.
-- Si utilizas `State.addListener()` manual, asegúrate de desuscribirlo en el `onDetached()` de tu componente raíz.
+1. **Suscripciones reactivas:** utilizar siempre `component.bindState(state, callback)` para que `GuiComponent.destroy()` desvincule el listener al cerrar la pantalla.
+2. **Capturas en lambdas:** evitar capturar instancias completas de `GuiScreen` dentro de listeners globales (`Scope.GLOBAL` o `Scope.SESSION`); preferir `Scope.SCREEN` o `syncedState(...)` en `GuiBaseScreen`.
+3. **Inicialización única:** instanciar componentes, fuentes (`FontRegistry`) y descargas (`MediaPipeline`) durante la fase de inicialización, nunca dentro de `update()` o `renderSelf()`.
+4. **Logs estructurados:** utilizar `org.apache.logging.log4j.LogManager` en lugar de `System.out.println` / `printStackTrace()`.

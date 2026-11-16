@@ -1,70 +1,83 @@
-# Botones y Entradas (Inputs)
+# Botones y Entradas (`GuiButton`, `GuiTextInput`, `GuiToggle`, `GuiSlider`)
 
-Los componentes de interacción primaria están diseñados para aprovechar al máximo la **API Fluida** (Fluent API) y eliminar la necesidad de sobrecargar el código con llamadas repetitivas.
+Los componentes interactivos primarios operan bajo el paradigma reactivo de X4UI (`State<T>`) y la API fluida de `GuiComponent`, eliminando el acoplamiento manual de eventos.
 
-## GuiButton
+---
 
-El botón clásico interactivo. Las propiedades visuales y variantes se configuran mediante builders fluidos:
+## 1. `GuiButton`
+
+Botón interactivo con variantes temáticas (`DEFAULT`, `PRIMARY`, `SECONDARY`, `SUCCESS`, `DANGER`, `GHOST`) y soporte de tooltips:
 
 ```java
-GuiButton btn = (GuiButton) new GuiButton(0, 0, 0, 20, "Guardar", () -> {
-    System.out.println("Guardado!");
+GuiButton saveBtn = (GuiButton) new GuiButton(0, 0, 0, 22, "Guardar", () -> {
+    // Acción al hacer clic
 })
-.withPercentWidth(1.0f)                           // Dimensionamiento responsivo
-.withVariant(GuiButton.Variant.SUCCESS)            // Variante visual del tema (DEFAULT, PRIMARY, SECONDARY, SUCCESS, DANGER, GHOST)
-.withTooltip("Guarda los cambios permanentemente"); // Tooltip instantáneo al pasar el cursor
+    .withPercentWidth(1.0f)
+    .withVariant(GuiButton.Variant.PRIMARY)
+    .withTooltip("Guarda la configuración actual");
 ```
 
-## Entradas de Texto (GuiTextInput)
+---
 
-`GuiTextInput` gestiona internamente el foco, renderizado de cursor parpadeante, selección y portapapeles.
+## 2. `GuiTextInput`
+
+Campo de texto con foco automático, cursor, selección, portapapeles y enlace bidireccional con `State<String>`:
 
 ```java
-GuiTextInput nameInput = (GuiTextInput) new GuiTextInput(0, 0, 0, 20, "")
+State<String> username = new State<>("");
+
+GuiTextInput input = (GuiTextInput) new GuiTextInput(0, 0, 0, 20, username)
+    .setSubmitKey(KeyCodes.ENTER)
+    .onEnter(() -> submitForm(username.get()))
+    .setOnTextChanged(txt -> {
+        // Reacción inmediata por tecla (opcional si ya usa State<String>)
+    })
     .withPercentWidth(1.0f);
 
-// Configurar placeholder
-nameInput.setPlaceholder("Escribe tu nombre...");
-
-// Escuchar cambios de texto
-nameInput.setOnTextChanged(text -> {
-    System.out.println("Texto actual: " + text);
-});
+input.setPlaceholder("Nombre de usuario...");
 ```
 
-### Estados Reactivos
-Para vincular `GuiTextInput` a un `State<String>` reactivo:
+---
+
+## 3. `GuiToggle`
+
+Interruptor booleano enlazable a un `State<Boolean>` o a un `Consumer<Boolean>`:
 
 ```java
-State<String> userName = new State<>("");
-nameInput.bindState(userName, txt -> {
-    nameInput.setText(txt);
-});
-```
+State<Boolean> showHud = new State<>(true);
 
-## Sliders y Toggles
-
-### Sliders Numéricos (`GuiSliderInt`, `GuiSliderFloat`, `GuiSliderDouble`)
-
-Permiten seleccionar valores numéricos con arrastre del ratón o teclado:
-
-```java
-GuiSliderInt volumeSlider = (GuiSliderInt) new GuiSliderInt(0, 0, 0, 20, 0, 100, 50, "Volumen: ")
+// Enlace reactivo directo
+GuiToggle toggle = (GuiToggle) new GuiToggle(0, 0, 0, 20, "Mostrar HUD", showHud)
     .withPercentWidth(1.0f);
 
-volumeSlider.setOnValueChanged(val -> {
-    System.out.println("Nuevo volumen: " + val);
+// O con valor inicial y callback
+GuiToggle altToggle = new GuiToggle(0, 0, 140, 20, "Modo compacto", false, enabled -> {
+    // Manejo explícito
 });
 ```
 
-### Interruptores y Casillas (`GuiToggle`)
+---
 
-`GuiToggle` proporciona un interruptor booleano animado con soporte para etiquetas:
+## 4. Sliders Numéricos (`GuiSliderInt`, `GuiSliderFloat`, `GuiSliderDouble`)
+
+Los deslizadores trabajan directamente sobre un `State<T>` tipado con límites `min`, `max` y paso `step`:
 
 ```java
-GuiToggle showHUD = (GuiToggle) new GuiToggle(0, 0, 120, 20, "Mostrar HUD", true);
+State<Integer> volume = new State<>(50);
 
-showHUD.setOnToggle(enabled -> {
-    System.out.println("HUD activo: " + enabled);
-});
+GuiSliderInt volumeSlider = (GuiSliderInt) new GuiSliderInt(
+    0, 0, 0, 20, volume, 0, 100, 1
+).withPercentWidth(1.0f);
 ```
+
+También están disponibles `GuiSliderFloat` y `GuiSliderDouble` con la misma firma reactiva.
+
+---
+
+## 5. Qué Evitar en Entradas
+
+| Antipatrón | Causa Técnica del Problema | Solución Correcta |
+| :--- | :--- | :--- |
+| Usar constantes de `org.lwjgl.input.Keyboard` en `setSubmitKey(...)` | Rompe portabilidad en CleanroomMC (LWJGL 3) | Utilizar `KeyCodes.ENTER` u otras constantes de `KeyCodes` |
+| Leer `mc.displayWidth` sin guarda en componentes custom | Puede dividir por `0` al minimizar la ventana | Delegar en `UIInput.safeMouseX(...)` / `safeMouseY(...)` |
+| Duplicar estado en campos booleanos locales fuera de `State<T>` | Desincroniza la vista si el servidor o un lote actualiza el valor | Enlazar el widget directamente a `State<T>` |

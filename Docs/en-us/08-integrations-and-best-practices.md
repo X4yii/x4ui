@@ -1,55 +1,51 @@
-# 08 - Integrations and Best Practices
+# 08 - Integrations & Best Practices
 
-This document details standardized guidelines for working with X4UI in large-scale projects, avoiding architectural debt, and ensuring consistency.
-
----
-
-## 1. Naming Conventions
-
-To maintain architectural clarity and avoid the "God Object" syndrome, the `Gui` prefix in X4UI is strictly reserved for **evident visual components** that inherit from `GuiComponent`.
-
-### What SHOULD be named `Gui`
-- Interactive components: `GuiButton`, `GuiTextField`, `GuiCheckbox`.
-- Layout containers: `GuiPanel`, `GuiScrollPanel`, `GuiVirtualList`.
-- Graphics and multimedia: `GuiImage`, `GuiVideo`, `GuiSprite`.
-
-### What SHOULD NOT be named `Gui` (Anti-pattern)
-- Managers and Controllers: Do not name a queue manager `GuiToastManager` if it doesn't draw itself. Name it `ToastManager`. *(Note: if the manager inherits from `GuiOverlay` and renders content autonomously, the `Gui` prefix is justifiable).*
-- Data Structures and States: `UIStateBus` is not called `GuiStateBus`. `State<T>` is not called `GuiState`.
-- Network Models: Do not name a synchronization packet `GuiPacket`.
+This document covers X4UI's architectural conventions (`r1.0b6`), native Just Enough Items (JEI) integration, and recommended practices for consumer mods.
 
 ---
 
-## 2. Dependency Injection and Models
+## 1. Native JEI Integration (`JeiPlugin`)
 
-Never pass massive game objects (like the entire player, worlds, or databases) directly into the constructor of visual components.
-Views should be *Dumb Views* and reactive.
+X4UI automatically activates `JeiPlugin` and `JeiAdvancedGuiHandler` when JEI is loaded:
+- Reports exclusion rectangles from `GuiBaseContainer` and all active `IGuiOverlay` instances in `GuiOverlayManager`.
+- Prevents JEI's ingredient list from overlapping injected overlays or extended modal containers.
+- Requires no extra setup beyond keeping accurate `getExclusionAreas()` bounds on custom overlays.
 
-**Anti-pattern (Tight Coupling):**
-```java
-GuiPanel playerStats = new GuiPlayerStatsPanel(Minecraft.getMinecraft().player);
-```
+---
 
-**Best Practice (Reactive, Decoupled):**
-Pass reactive state containers or use the `UIStateBus`.
+## 2. Naming & Architectural Conventions
+
+The `Gui` prefix is reserved for **visual components** extending `GuiComponent` or screen contracts (`GuiBaseScreen`, `GuiBaseContainer`, `IGuiOverlay`):
+
+| Category | Standard Naming | Avoid |
+| :--- | :--- | :--- |
+| Widgets & Containers | `GuiButton`, `GuiTextInput`, `GuiToggle`, `GuiPanel`, `GuiScrollPanel` | Ambiguous names without visual role |
+| Non-visual Managers | `OverlayDockManager`, `MediaManager`, `ScreenRegistry` | Prefixing pure logic/registry classes with `Gui` |
+| State & Networking | `State<T>`, `UIStateBus`, `UINetwork`, `PacketGuiRpc`, `ActionGuard` | Coupling packets or shared state with `client.gui.*` |
+
+---
+
+## 3. Decoupled Views (*Dumb Views*)
+
+Visual components should not accept heavy game objects (`World`, `EntityPlayer`, `TileEntity`) in their constructors when they only display or mutate specific fields. Passing `State<T>` or reading from `UIStateBus` keeps views decoupled and server-optional friendly:
 
 ```java
-State<PlayerStatsData> stats = new State<>(new PlayerStatsData());
-GuiPanel playerStats = new PlayerStatsPanel(stats); // The panel subscribes internally
+// Recommended: view decoupled via State<T>
+public class EnergyCard extends GuiPanel {
+    public EnergyCard(State<Integer> energyState) {
+        super(0, 0, 0, 40);
+        GuiLabel label = new GuiLabel(0, 0, "0 RF", 0xFFFFFFFF);
+        label.bindState(energyState, rf -> label.setText(rf + " RF"));
+        addChild(label);
+    }
+}
 ```
 
 ---
 
-## 3. Initialization Practices
+## 4. Memory & Lifecycle Discipline
 
-When creating an entire `Screen` in Minecraft that uses X4UI, instantiate your components exactly once in the constructor or in an initialization method called *before* attaching it to the screen.
-
-Never start heavy downloads from the `MediaPipeline` inside `update()` or `render()`. Do it during the initialization phase.
-
----
-
-## 4. Memory Auditing
-
-Remember that in Java 8, carelessly abusing lambdas (capturing references of the entire `Screen`) can prevent the Garbage Collector from freeing closed screens.
-- Always use `bindState` on components, as X4UI will automatically unbind them when the component is destroyed upon closing the `Screen`.
-- If you use manual `State.addListener()`, make sure to unsubscribe it in the `onDetached()` of your root component.
+1. **Reactive bindings:** always use `component.bindState(state, callback)` so `GuiComponent.destroy()` unbinds listeners automatically on screen close.
+2. **Lambda captures:** avoid capturing `GuiScreen` instances inside `Scope.GLOBAL` or `Scope.SESSION` listeners; prefer `Scope.SCREEN` or `syncedState(...)` in `GuiBaseScreen`.
+3. **Single-pass initialization:** instantiate components, register fonts (`FontRegistry`), and trigger media fetches (`MediaPipeline`) during initialization, never inside `update()` or `renderSelf()`.
+4. **Structured logging:** use `org.apache.logging.log4j.LogManager` instead of `System.out.println` or `printStackTrace()`.
