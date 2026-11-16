@@ -90,41 +90,153 @@ public class FlexLayout implements ILayoutManager {
 
         if (!flexWrap) {
             List<GuiComponent> visible = new ArrayList<>();
-            int totalMainFixed = 0;
-            int spacerCount = 0;
-            int maxCross = 0;
-
             for (GuiComponent child : children) {
-                if (!child.isVisible()) continue;
-                visible.add(child);
+                if (child.isVisible()) visible.add(child);
+            }
+            int n = visible.size();
+            int[] resolvedMain = new int[n];
+            int[] minMain = new int[n];
+            int[] maxMain = new int[n];
+            float[] growWeights = new float[n];
+            float[] shrinkWeights = new float[n];
+            boolean[] frozen = new boolean[n];
+
+            int totalBaseMain = 0;
+            int totalMarginsMain = 0;
+            int maxCross = 0;
+            boolean hasSpacer = false;
+
+            for (int i = 0; i < n; i++) {
+                GuiComponent child = visible.get(i);
                 Insets margin = child.getMargin();
                 if (isSpacer(child)) {
-                    spacerCount++;
-                } else if (flexDirection == FlexDirection.HORIZONTAL) {
+                    hasSpacer = true;
+                    resolvedMain[i] = 0;
+                    minMain[i] = 0;
+                    maxMain[i] = Integer.MAX_VALUE;
+                    growWeights[i] = child.getFlexGrow() > 0.0f ? child.getFlexGrow() : 1.0f;
+                    shrinkWeights[i] = 0.0f;
+                    continue;
+                }
+                if (flexDirection == FlexDirection.HORIZONTAL) {
                     if (alignItems == FlexAlign.STRETCH && !shouldAdjustParentH && child.getPercentHeight() < 0) {
-                        child.setHeight(Math.max(0, innerH - margin.top - margin.bottom));
+                        child.applyLayoutHeight(Math.max(0, innerH - margin.top - margin.bottom));
                     }
-                    totalMainFixed += child.getWidth() + margin.left + margin.right;
+                    int rawBase = (child.getFlexGrow() > 0.0f || child.getFlexShrink() > 0.0f) ? child.getBaseWidth() : child.getWidth();
+                    int base = child.clampWidth(rawBase);
+                    resolvedMain[i] = base;
+                    minMain[i] = child.getMinWidth();
+                    maxMain[i] = child.getMaxWidth();
+                    growWeights[i] = child.getFlexGrow();
+                    shrinkWeights[i] = child.getFlexShrink() * Math.max(1, base);
+                    totalBaseMain += base;
+                    totalMarginsMain += margin.left + margin.right;
                     maxCross = Math.max(maxCross, child.getHeight() + margin.top + margin.bottom);
                 } else {
                     if (alignItems == FlexAlign.STRETCH && !shouldAdjustParentW && child.getPercentWidth() < 0) {
-                        child.setWidth(Math.max(0, innerW - margin.left - margin.right));
+                        child.applyLayoutWidth(Math.max(0, innerW - margin.left - margin.right));
                     }
-                    totalMainFixed += child.getHeight() + margin.top + margin.bottom;
+                    int rawBase = (child.getFlexGrow() > 0.0f || child.getFlexShrink() > 0.0f) ? child.getBaseHeight() : child.getHeight();
+                    int base = child.clampHeight(rawBase);
+                    resolvedMain[i] = base;
+                    minMain[i] = child.getMinHeight();
+                    maxMain[i] = child.getMaxHeight();
+                    growWeights[i] = child.getFlexGrow();
+                    shrinkWeights[i] = child.getFlexShrink() * Math.max(1, base);
+                    totalBaseMain += base;
+                    totalMarginsMain += margin.top + margin.bottom;
                     maxCross = Math.max(maxCross, child.getWidth() + margin.left + margin.right);
                 }
             }
 
-            int totalGaps = visible.size() > 1 ? gap * (visible.size() - 1) : 0;
-            int usedMain = totalMainFixed + totalGaps;
+            int totalGaps = n > 1 ? gap * (n - 1) : 0;
+            int usedMain = totalBaseMain + totalMarginsMain + totalGaps;
             int availableMain = (flexDirection == FlexDirection.HORIZONTAL) ? innerW : innerH;
-            int freeMain = Math.max(0, availableMain - usedMain);
+            int deltaMain = availableMain - usedMain;
+            boolean canGrow = !(flexDirection == FlexDirection.HORIZONTAL ? shouldAdjustParentW : shouldAdjustParentH)
+                    || (hasSpacer && availableMain > 0);
 
-            int spacerEach = (spacerCount > 0) ? (freeMain / spacerCount) : 0;
-            int spacerRem = (spacerCount > 0) ? (freeMain % spacerCount) : 0;
+            if (deltaMain > 0 && canGrow) {
+                int remaining = deltaMain;
+                while (remaining > 0) {
+                    double totalGrow = 0.0;
+                    for (int i = 0; i < n; i++) {
+                        if (!frozen[i] && growWeights[i] > 0.0f && resolvedMain[i] < maxMain[i]) {
+                            totalGrow += growWeights[i];
+                        } else if (!frozen[i] && (growWeights[i] <= 0.0f || resolvedMain[i] >= maxMain[i])) {
+                            frozen[i] = true;
+                        }
+                    }
+                    if (totalGrow <= 0.0) break;
 
+                    int distributedThisPass = 0;
+                    boolean hitBound = false;
+                    int activeRemaining = remaining;
+                    for (int i = 0; i < n; i++) {
+                        if (frozen[i]) continue;
+                        int share = (int) Math.floor(activeRemaining * (growWeights[i] / totalGrow));
+                        if (share == 0 && remaining - distributedThisPass > 0) {
+                            share = 1;
+                        }
+                        int room = maxMain[i] - resolvedMain[i];
+                        int add = Math.min(share, Math.min(room, remaining - distributedThisPass));
+                        if (add > 0) {
+                            resolvedMain[i] += add;
+                            distributedThisPass += add;
+                        }
+                        if (resolvedMain[i] >= maxMain[i]) {
+                            frozen[i] = true;
+                            hitBound = true;
+                        }
+                    }
+                    remaining -= distributedThisPass;
+                    if (distributedThisPass == 0 && !hitBound) break;
+                }
+            } else if (deltaMain < 0) {
+                int remainingOverflow = -deltaMain;
+                while (remainingOverflow > 0) {
+                    double totalShrink = 0.0;
+                    for (int i = 0; i < n; i++) {
+                        if (!frozen[i] && shrinkWeights[i] > 0.0f && resolvedMain[i] > minMain[i]) {
+                            totalShrink += shrinkWeights[i];
+                        } else if (!frozen[i] && (shrinkWeights[i] <= 0.0f || resolvedMain[i] <= minMain[i])) {
+                            frozen[i] = true;
+                        }
+                    }
+                    if (totalShrink <= 0.0) break;
+
+                    int reducedThisPass = 0;
+                    boolean hitBound = false;
+                    int activeOverflow = remainingOverflow;
+                    for (int i = 0; i < n; i++) {
+                        if (frozen[i]) continue;
+                        int share = (int) Math.floor(activeOverflow * (shrinkWeights[i] / totalShrink));
+                        if (share == 0 && remainingOverflow - reducedThisPass > 0) {
+                            share = 1;
+                        }
+                        int room = resolvedMain[i] - minMain[i];
+                        int sub = Math.min(share, Math.min(room, remainingOverflow - reducedThisPass));
+                        if (sub > 0) {
+                            resolvedMain[i] -= sub;
+                            reducedThisPass += sub;
+                        }
+                        if (resolvedMain[i] <= minMain[i]) {
+                            frozen[i] = true;
+                            hitBound = true;
+                        }
+                    }
+                    remainingOverflow -= reducedThisPass;
+                    if (reducedThisPass == 0 && !hitBound) break;
+                }
+            }
+
+            int finalUsedMain = totalMarginsMain + totalGaps;
+            for (int i = 0; i < n; i++) {
+                finalUsedMain += resolvedMain[i];
+            }
+            int freeMain = Math.max(0, availableMain - finalUsedMain);
             int mainOffset = 0;
-            if (spacerCount == 0 && freeMain > 0) {
+            if (freeMain > 0) {
                 if (justifyContent == FlexAlign.CENTER) {
                     mainOffset = freeMain / 2;
                 } else if (justifyContent == FlexAlign.END) {
@@ -133,29 +245,27 @@ public class FlexLayout implements ILayoutManager {
             }
 
             int currentMain = (flexDirection == FlexDirection.HORIZONTAL ? padding.left : padding.top) + mainOffset;
-            int spacerSeen = 0;
-
-            for (GuiComponent child : visible) {
+            for (int i = 0; i < n; i++) {
+                GuiComponent child = visible.get(i);
                 Insets margin = child.getMargin();
                 if (isSpacer(child)) {
-                    int extra = spacerEach + (spacerSeen < spacerRem ? 1 : 0);
-                    spacerSeen++;
                     if (flexDirection == FlexDirection.HORIZONTAL) {
                         child.setX(currentMain);
                         child.setY(padding.top);
-                        child.setWidth(extra);
-                        child.setHeight(0);
+                        child.applyLayoutWidth(resolvedMain[i]);
+                        child.applyLayoutHeight(0);
                     } else {
                         child.setX(padding.left);
                         child.setY(currentMain);
-                        child.setWidth(0);
-                        child.setHeight(extra);
+                        child.applyLayoutWidth(0);
+                        child.applyLayoutHeight(resolvedMain[i]);
                     }
-                    currentMain += extra + gap;
+                    currentMain += resolvedMain[i] + gap;
                     continue;
                 }
 
                 if (flexDirection == FlexDirection.HORIZONTAL) {
+                    child.applyLayoutWidth(resolvedMain[i]);
                     int childCross = child.getHeight() + margin.top + margin.bottom;
                     int crossBase = shouldAdjustParentH ? maxCross : innerH;
                     int crossOffset = 0;
@@ -166,8 +276,9 @@ public class FlexLayout implements ILayoutManager {
                     }
                     child.setX(currentMain + margin.left);
                     child.setY(padding.top + crossOffset + margin.top);
-                    currentMain += child.getWidth() + margin.left + margin.right + gap;
+                    currentMain += resolvedMain[i] + margin.left + margin.right + gap;
                 } else {
+                    child.applyLayoutHeight(resolvedMain[i]);
                     int childCross = child.getWidth() + margin.left + margin.right;
                     int crossBase = shouldAdjustParentW ? maxCross : innerW;
                     int crossOffset = 0;
@@ -178,20 +289,20 @@ public class FlexLayout implements ILayoutManager {
                     }
                     child.setX(padding.left + crossOffset + margin.left);
                     child.setY(currentMain + margin.top);
-                    currentMain += child.getHeight() + margin.top + margin.bottom + gap;
+                    currentMain += resolvedMain[i] + margin.top + margin.bottom + gap;
                 }
             }
 
             if (flexDirection == FlexDirection.VERTICAL) {
                 int contentH = (visible.isEmpty() ? padding.top : (currentMain - gap)) + padding.bottom;
-                if (shouldAdjustParentH) parent.setHeight(contentH);
+                if (shouldAdjustParentH) parent.applyLayoutHeight(contentH);
                 if (parent.getWidth() == 0 && parent.getPercentWidth() < 0) {
-                    parent.setWidth(padding.left + maxCross + padding.right);
+                    parent.applyLayoutWidth(padding.left + maxCross + padding.right);
                 }
             } else {
                 int contentW = (visible.isEmpty() ? padding.left : (currentMain - gap)) + padding.right;
-                if (shouldAdjustParentW) parent.setWidth(contentW);
-                if (shouldAdjustParentH) parent.setHeight(padding.top + maxCross + padding.bottom);
+                if (shouldAdjustParentW) parent.applyLayoutWidth(contentW);
+                if (shouldAdjustParentH) parent.applyLayoutHeight(padding.top + maxCross + padding.bottom);
             }
             return;
         }

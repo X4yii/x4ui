@@ -14,6 +14,10 @@ public class GuiSlot extends GuiComponent {
         this.containerScreen = containerScreen;
     }
 
+    public static GuiSlot of(Slot slot, GuiBaseContainer containerScreen) {
+        return new GuiSlot(slot, containerScreen);
+    }
+
     public Slot getSlot() {
         return slot;
     }
@@ -34,6 +38,11 @@ public class GuiSlot extends GuiComponent {
             slot.xPos = -9999;
             slot.yPos = -9999;
         }
+    }
+
+    @Override
+    protected void onBoundsChanged() {
+        syncSlotPosition();
     }
 
     @Override
