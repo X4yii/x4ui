@@ -2,9 +2,6 @@ package com.x4yi.x4ui.client.gui.utils;
 
 import java.util.Objects;
 
-/**
- * Immutable per-corner radii specification for rectangles and panels.
- */
 public final class CornerRadii {
     public static final CornerRadii ZERO = new CornerRadii(0, 0, 0, 0);
 
@@ -73,6 +70,9 @@ public final class CornerRadii {
 
     public CornerRadii clamp(int width, int height) {
         int maxR = Math.max(0, Math.min(width, height) / 2);
+        if (topLeft <= maxR && topRight <= maxR && bottomRight <= maxR && bottomLeft <= maxR) {
+            return this;
+        }
         return of(
                 Math.min(topLeft, maxR),
                 Math.min(topRight, maxR),

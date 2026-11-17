@@ -205,6 +205,7 @@ public class GLGraphics implements IGraphics {
         buffer.pos(x + width, y, 0.0D).endVertex();
         buffer.pos(x, y, 0.0D).endVertex();
         tessellator.draw();
+        GL11.glLineWidth(1.0f);
         GlStateManager.enableTexture2D();
     }
     @Override
@@ -280,6 +281,7 @@ public class GLGraphics implements IGraphics {
             buffer.pos(x, y, 0.0D).endVertex();
         }
         tessellator.draw();
+        GL11.glLineWidth(1.0f);
         GlStateManager.enableTexture2D();
     }
 
@@ -294,22 +296,39 @@ public class GLGraphics implements IGraphics {
         int bw = Math.min(borderWidth, Math.min(width, height));
         boolean hasTop = BorderSides.has(borderSides, BorderSides.TOP);
         boolean hasBottom = BorderSides.has(borderSides, BorderSides.BOTTOM);
-        if (hasTop) {
-            drawRect(x, y, width, bw, argb);
-        }
-        if (hasBottom) {
-            drawRect(x, y + height - bw, width, bw, argb);
-        }
+        boolean hasLeft = BorderSides.has(borderSides, BorderSides.LEFT);
+        boolean hasRight = BorderSides.has(borderSides, BorderSides.RIGHT);
         int vertY = y + (hasTop ? bw : 0);
         int vertH = height - (hasTop ? bw : 0) - (hasBottom ? bw : 0);
+        argb = applyTintAndAlpha(argb);
+        float a = ((argb >> 24) & 0xFF) / 255.0f;
+        float r = ((argb >> 16) & 0xFF) / 255.0f;
+        float g = ((argb >> 8) & 0xFF) / 255.0f;
+        float b = (argb & 0xFF) / 255.0f;
+        Tessellator tessellator = Tessellator.getInstance();
+        BufferBuilder buffer = tessellator.getBuffer();
+        GlStateManager.enableBlend();
+        GlStateManager.disableTexture2D();
+        GlStateManager.tryBlendFuncSeparate(GlStateManager.SourceFactor.SRC_ALPHA, GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA, GlStateManager.SourceFactor.ONE, GlStateManager.DestFactor.ZERO);
+        GlStateManager.color(r, g, b, a);
+        buffer.begin(GL11.GL_QUADS, DefaultVertexFormats.POSITION);
+        if (hasTop) addPosQuad(buffer, x, y, width, bw);
+        if (hasBottom) addPosQuad(buffer, x, y + height - bw, width, bw);
         if (vertH > 0) {
-            if (BorderSides.has(borderSides, BorderSides.LEFT)) {
-                drawRect(x, vertY, bw, vertH, argb);
-            }
-            if (BorderSides.has(borderSides, BorderSides.RIGHT)) {
-                drawRect(x + width - bw, vertY, bw, vertH, argb);
-            }
+            if (hasLeft) addPosQuad(buffer, x, vertY, bw, vertH);
+            if (hasRight) addPosQuad(buffer, x + width - bw, vertY, bw, vertH);
         }
+        tessellator.draw();
+        GL11.glLineWidth(1.0f);
+        GlStateManager.enableTexture2D();
+    }
+
+    private static void addPosQuad(BufferBuilder buffer, int x, int y, int w, int h) {
+        if (w <= 0 || h <= 0) return;
+        buffer.pos(x, y + h, 0.0D).endVertex();
+        buffer.pos(x + w, y + h, 0.0D).endVertex();
+        buffer.pos(x + w, y, 0.0D).endVertex();
+        buffer.pos(x, y, 0.0D).endVertex();
     }
 
     @Override
@@ -383,7 +402,6 @@ public class GLGraphics implements IGraphics {
             return;
         }
 
-        // General per-side + per-corner rounded border rendering
         int bw = borderWidth;
         if (hasTop) {
             int xStart = x + (effTL > 0 ? effTL : 0);
@@ -432,6 +450,7 @@ public class GLGraphics implements IGraphics {
             buffer.pos(cx + COS_TABLE[i] * radius, cy + SIN_TABLE[i] * radius, 0.0D).endVertex();
         }
         tessellator.draw();
+        GL11.glLineWidth(1.0f);
         GlStateManager.enableTexture2D();
     }
     @Override
@@ -452,6 +471,7 @@ public class GLGraphics implements IGraphics {
         buffer.pos(x1, y1, 0.0D).endVertex();
         buffer.pos(x2, y2, 0.0D).endVertex();
         tessellator.draw();
+        GL11.glLineWidth(1.0f);
         GlStateManager.enableTexture2D();
     }
     @Override
@@ -473,6 +493,7 @@ public class GLGraphics implements IGraphics {
             buffer.pos(centerX + COS_TABLE[i] * radius, centerY + SIN_TABLE[i] * radius, 0.0D).endVertex();
         }
         tessellator.draw();
+        GL11.glLineWidth(1.0f);
         GlStateManager.enableTexture2D();
     }
     @Override
@@ -485,6 +506,7 @@ public class GLGraphics implements IGraphics {
     }
     @Override
     public void drawGradient4Corners(int x, int y, int width, int height, int topLeft, int topRight, int bottomLeft, int bottomRight) {
+        if (width <= 0 || height <= 0) return;
         topLeft = applyTintAndAlpha(topLeft);
         topRight = applyTintAndAlpha(topRight);
         bottomLeft = applyTintAndAlpha(bottomLeft);
@@ -507,7 +529,6 @@ public class GLGraphics implements IGraphics {
                 .color((topLeft >> 16) & 0xFF, (topLeft >> 8) & 0xFF, topLeft & 0xFF, (topLeft >> 24) & 0xFF).endVertex();
         tessellator.draw();
         GlStateManager.shadeModel(GL11.GL_FLAT);
-        GlStateManager.disableBlend();
         GlStateManager.enableAlpha();
         GlStateManager.enableTexture2D();
     }
@@ -517,7 +538,7 @@ public class GLGraphics implements IGraphics {
     }
     @Override
     public void drawTextureRegion(ResourceLocation texture, int x, int y, int width, int height, float u, float v, float uWidth, float vHeight, int texWidth, int texHeight) {
-        if (width <= 0 || height <= 0) return;
+        if (width <= 0 || height <= 0 || texWidth <= 0 || texHeight <= 0) return;
         mc.getTextureManager().bindTexture(texture);
         resetColor();
         float minU = u / (float) texWidth;

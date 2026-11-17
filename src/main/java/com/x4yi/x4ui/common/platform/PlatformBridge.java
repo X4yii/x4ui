@@ -3,9 +3,6 @@ package com.x4yi.x4ui.common.platform;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.nio.ByteBuffer;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.atomic.AtomicInteger;
 
 public final class PlatformBridge {
     private static final Object UNSAFE;
@@ -59,15 +56,6 @@ public final class PlatformBridge {
         }
     }
 
-    public static ExecutorService newIoExecutor(String namePrefix, int fixedThreads) {
-        final AtomicInteger counter = new AtomicInteger(1);
-        return Executors.newFixedThreadPool(Math.max(1, fixedThreads), r -> {
-            Thread t = new Thread(r, namePrefix + "-" + counter.getAndIncrement());
-            t.setDaemon(true);
-            return t;
-        });
-    }
-
     public static void cleanDirectBuffer(ByteBuffer buffer) {
         if (buffer == null || !buffer.isDirect()) return;
         if (UNSAFE != null && INVOKE_CLEANER != null) {
@@ -90,4 +78,3 @@ public final class PlatformBridge {
         }
     }
 }
-

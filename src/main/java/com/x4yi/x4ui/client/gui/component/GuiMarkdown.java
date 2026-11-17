@@ -1,8 +1,4 @@
 package com.x4yi.x4ui.client.gui.component;
-import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.FontRenderer;
-import net.minecraft.client.gui.Gui;
-import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.util.ResourceLocation;
 import net.minecraft.util.text.TextFormatting;
 import java.util.ArrayList;
@@ -25,20 +21,25 @@ public class GuiMarkdown extends GuiComponent {
     private int colorSep = 0xFF444450;
     private int lineHeight = 10;
     private int indentWidth = 10;
+    private int lastParsedWidth = -1;
     public GuiMarkdown(int x, int y, int width, String text) {
         super(x, y, width, 0);
         this.rawText = text;
         parseAndLayout();
+    }
+    public static GuiMarkdown of(String text) {
+        GuiMarkdown md = new GuiMarkdown(0, 0, 0, text);
+        md.withPercentWidth(1.0f);
+        return md;
     }
     public void setText(String text) {
         this.rawText = text;
         parseAndLayout();
     }
     @Override
-    public void setWidth(int width) {
-        int prev = this.width;
-        super.setWidth(width);
-        if (prev != width) {
+    protected void onBoundsChanged() {
+        super.onBoundsChanged();
+        if (this.width != lastParsedWidth) {
             parseAndLayout();
         }
     }
@@ -61,6 +62,7 @@ public class GuiMarkdown extends GuiComponent {
         return anchors.getOrDefault(id, 0);
     }
     private void parseAndLayout() {
+        this.lastParsedWidth = this.width;
         nodes.clear();
         anchors.clear();
         this.height = 0;
@@ -219,6 +221,7 @@ public class GuiMarkdown extends GuiComponent {
     }
     @Override
     public boolean onMouseClick(int mouseX, int mouseY, int mouseButton) {
+        if (!visible || !enabled) return false;
         if (super.onMouseClick(mouseX, mouseY, mouseButton)) return true;
         if (mouseButton == 0) {
             int absX = getAbsoluteX();

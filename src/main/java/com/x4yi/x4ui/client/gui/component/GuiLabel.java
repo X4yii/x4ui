@@ -11,6 +11,12 @@ public class GuiLabel extends GuiComponent {
         this.centered = false;
         updateDimensions();
     }
+    public static GuiLabel of(String text) {
+        return new GuiLabel(0, 0, text, 0xFFE6E8EC);
+    }
+    public static GuiLabel of(String text, int color) {
+        return new GuiLabel(0, 0, text, color);
+    }
     public GuiLabel setCentered(boolean centered) {
         this.centered = centered;
         return this;

@@ -56,8 +56,9 @@ public abstract class GuiSlider<T extends Number> extends GuiComponent {
     }
     @Override
     public boolean onMouseClick(int mouseX, int mouseY, int mouseButton) {
+        if (!visible || !enabled) return false;
         if (!super.onMouseClick(mouseX, mouseY, mouseButton)) {
-            if (isMouseOver(mouseX, mouseY) && enabled && mouseButton == 0) {
+            if (isMouseOver(mouseX, mouseY) && mouseButton == 0) {
                 dragging = true;
                 updateValueFromMouse(mouseX, mouseY);
                 return true;

@@ -4,6 +4,9 @@ public class GuiSliderInt extends GuiSlider<Integer> {
     public GuiSliderInt(int x, int y, int width, int height, State<Integer> state, Integer min, Integer max, Integer step) {
         super(x, y, width, height, state, min, max, step);
     }
+    public static GuiSliderInt of(State<Integer> state, int min, int max, int step) {
+        return (GuiSliderInt) new GuiSliderInt(0, 0, 140, 20, state, min, max, step).withPercentWidth(1.0f);
+    }
     @Override
     protected double getPercentage(Integer value) {
         if (value == null || max <= min) return 0.0;

@@ -1,8 +1,10 @@
 package com.x4yi.x4ui.client.gui.animation;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import java.lang.ref.WeakReference;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
-import java.util.concurrent.CopyOnWriteArrayList;
 public class GuiAnimator {
     public enum Easing {
         LINEAR,
@@ -40,38 +42,54 @@ public class GuiAnimator {
         void onUpdate(float currentValue);
         default void onComplete() {}
     }
-    private static final List<AnimationTask> activeAnimations = new CopyOnWriteArrayList<>();
+    private static final Logger LOGGER = LogManager.getLogger("x4ui");
+    private static final List<AnimationTask> activeAnimations = new ArrayList<>();
     public static void animate(Object target, String property, float startValue, float endValue, long durationMs, Easing easing, AnimationCallback callback) {
         if (target == null || callback == null) return;
-        activeAnimations.removeIf(task -> {
-            Object t = task.getTarget();
-            return t == null || (t == target && task.property.equals(property));
-        });
-        activeAnimations.add(new AnimationTask(target, property, startValue, endValue, durationMs, easing, callback));
+        synchronized (activeAnimations) {
+            activeAnimations.removeIf(task -> {
+                Object t = task.getTarget();
+                return t == null || (t == target && task.property.equals(property));
+            });
+            activeAnimations.add(new AnimationTask(target, property, startValue, endValue, durationMs, easing, callback));
+        }
     }
     public static void cancel(Object target) {
         if (target == null) return;
-        activeAnimations.removeIf(task -> {
-            Object t = task.getTarget();
-            return t == null || t == target;
-        });
+        synchronized (activeAnimations) {
+            activeAnimations.removeIf(task -> {
+                Object t = task.getTarget();
+                return t == null || t == target;
+            });
+        }
     }
     public static void cancel(Object target, String property) {
         if (target == null || property == null) return;
-        activeAnimations.removeIf(task -> {
-            Object t = task.getTarget();
-            return t == null || (t == target && Objects.equals(task.property, property));
-        });
+        synchronized (activeAnimations) {
+            activeAnimations.removeIf(task -> {
+                Object t = task.getTarget();
+                return t == null || (t == target && Objects.equals(task.property, property));
+            });
+        }
     }
     public static int getActiveAnimationCount() {
-        return activeAnimations.size();
+        synchronized (activeAnimations) {
+            return activeAnimations.size();
+        }
     }
     public static void update() {
+        List<AnimationTask> snapshot;
+        synchronized (activeAnimations) {
+            if (activeAnimations.isEmpty()) return;
+            snapshot = new ArrayList<>(activeAnimations);
+        }
         long currentTime = System.currentTimeMillis();
-        for (AnimationTask task : activeAnimations) {
+        List<AnimationTask> toRemove = null;
+        for (AnimationTask task : snapshot) {
             Object target = task.getTarget();
             if (target == null) {
-                activeAnimations.remove(task);
+                if (toRemove == null) toRemove = new ArrayList<>();
+                toRemove.add(task);
                 continue;
             }
             float progress = (float) (currentTime - task.startTime) / task.durationMs;
@@ -79,22 +97,33 @@ public class GuiAnimator {
                 try {
                     task.callback.onUpdate(task.endValue);
                     task.callback.onComplete();
-                } catch (Throwable ignored) {
+                } catch (Exception e) {
+                    LOGGER.warn("Animation completion callback failed for property '{}'", task.property, e);
                 }
-                activeAnimations.remove(task);
+                if (toRemove == null) toRemove = new ArrayList<>();
+                toRemove.add(task);
             } else {
                 float easedProgress = applyEasing(progress, task.easing);
                 float currentValue = task.startValue + (task.endValue - task.startValue) * easedProgress;
                 try {
                     task.callback.onUpdate(currentValue);
-                } catch (Throwable ignored) {
-                    activeAnimations.remove(task);
+                } catch (Exception e) {
+                    LOGGER.warn("Animation update callback failed for property '{}'", task.property, e);
+                    if (toRemove == null) toRemove = new ArrayList<>();
+                    toRemove.add(task);
                 }
+            }
+        }
+        if (toRemove != null) {
+            synchronized (activeAnimations) {
+                activeAnimations.removeAll(toRemove);
             }
         }
     }
     public static void clearAnimations() {
-        activeAnimations.clear();
+        synchronized (activeAnimations) {
+            activeAnimations.clear();
+        }
     }
     private static float applyEasing(float t, Easing easing) {
         switch (easing) {

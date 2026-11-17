@@ -2,9 +2,6 @@ package com.x4yi.x4ui.client.gui.component.layout;
 
 import com.x4yi.x4ui.client.gui.utils.BorderSides;
 
-/**
- * Docking edge relative to a parent or main window component.
- */
 public enum DockSide {
     LEFT,
     RIGHT,

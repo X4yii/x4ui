@@ -1,25 +1,34 @@
 package com.x4yi.x4ui.client.gui.component;
 import com.x4yi.x4ui.api.client.gui.IGraphics;
-import com.x4yi.x4ui.impl.client.gui.GLGraphics;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.FontRenderer;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Consumer;
 @SideOnly(Side.CLIENT)
 public abstract class GuiComponent {
     protected final Minecraft mc = Minecraft.getMinecraft();
-    protected final FontRenderer fontRenderer = mc != null ? mc.fontRenderer : null;
     protected GuiComponent parent;
     protected final List<GuiComponent> children = new ArrayList<>();
     protected final List<GuiComponent> renderChildren = new ArrayList<>();
     private final List<Runnable> unbinders = new ArrayList<>();
     protected int x;
     protected int y;
+    private int cachedAbsX;
+    private int cachedAbsY;
+    private boolean absDirty = true;
     protected int width;
     protected int height;
+    protected int baseWidth;
+    protected int baseHeight;
+    protected int minWidth = 0;
+    protected int maxWidth = Integer.MAX_VALUE;
+    protected int minHeight = 0;
+    protected int maxHeight = Integer.MAX_VALUE;
+    protected float flexGrow = 0.0f;
+    protected float flexShrink = 0.0f;
     protected float percentX = -1.0f;
     protected float percentY = -1.0f;
     protected float percentWidth = -1.0f;
@@ -137,19 +146,56 @@ public abstract class GuiComponent {
     public GuiComponent(int x, int y, int width, int height) {
         this.x = x;
         this.y = y;
-        this.width = width;
-        this.height = height;
+        this.width = Math.max(0, width);
+        this.height = Math.max(0, height);
+        this.baseWidth = this.width;
+        this.baseHeight = this.height;
     }
     protected void onAttached(GuiComponent parent) {}
     protected void onDetached() {}
+    public <T extends GuiComponent> T add(T child) {
+        if (child != null) {
+            addChild(child);
+        }
+        return child;
+    }
+    public <T extends GuiComponent> T add(T child, Consumer<T> config) {
+        if (child != null) {
+            if (config != null) {
+                config.accept(child);
+            }
+            addChild(child);
+        }
+        return child;
+    }
     public void addChild(GuiComponent child) {
+        if (child == null) return;
         child.setParent(this);
         children.add(child);
         child.onAttached(this);
         markDirty();
     }
+    private void clearDanglingFocus(GuiComponent removed) {
+        GuiComponent root = getRoot();
+        if (root.focusedComponent == removed || isDescendant(removed, root.focusedComponent)) {
+            root.focusedComponent = null;
+        }
+        if (root.scrollFocusedComponent == removed || isDescendant(removed, root.scrollFocusedComponent)) {
+            root.scrollFocusedComponent = null;
+            root.scrollFocusTimer = 0.0f;
+        }
+    }
+    private static boolean isDescendant(GuiComponent ancestor, GuiComponent candidate) {
+        GuiComponent cur = candidate;
+        while (cur != null) {
+            if (cur == ancestor) return true;
+            cur = cur.parent;
+        }
+        return false;
+    }
     public void removeChild(GuiComponent child) {
         if (child != null && children.remove(child)) {
+            clearDanglingFocus(child);
             child.destroy();
             child.onDetached();
             child.setParent(null);
@@ -158,6 +204,7 @@ public abstract class GuiComponent {
     }
     public void clearChildren() {
         for (GuiComponent child : children) {
+            clearDanglingFocus(child);
             child.destroy();
             child.onDetached();
             child.setParent(null);
@@ -170,15 +217,34 @@ public abstract class GuiComponent {
     }
     public void setParent(GuiComponent parent) {
         this.parent = parent;
+        invalidateAbs();
     }
     public GuiComponent getParent() {
         return parent;
     }
+    protected void invalidateAbs() {
+        if (!absDirty) {
+            absDirty = true;
+            for (GuiComponent child : children) {
+                child.invalidateAbs();
+            }
+        }
+    }
     public int getAbsoluteX() {
-        return parent == null ? x : parent.getAbsoluteX() + x;
+        if (absDirty) {
+            cachedAbsX = parent == null ? x : parent.getAbsoluteX() + x;
+            cachedAbsY = parent == null ? y : parent.getAbsoluteY() + y;
+            absDirty = false;
+        }
+        return cachedAbsX;
     }
     public int getAbsoluteY() {
-        return parent == null ? y : parent.getAbsoluteY() + y;
+        if (absDirty) {
+            cachedAbsX = parent == null ? x : parent.getAbsoluteX() + x;
+            cachedAbsY = parent == null ? y : parent.getAbsoluteY() + y;
+            absDirty = false;
+        }
+        return cachedAbsY;
     }
     public void update(float deltaTime) {
         if (!visible) return;
@@ -186,16 +252,32 @@ public abstract class GuiComponent {
             com.x4yi.x4ui.client.gui.utils.Insets parentPad = parent.getPadding();
             if (percentWidth >= 0.0f) {
                 int availW = Math.max(0, parent.getWidth() - parentPad.left - parentPad.right - margin.left - margin.right);
-                int pw = Math.max(0, (int) (availW * percentWidth));
-                if (this.width != pw) {
-                    setWidth(pw);
+                int pw = clampWidth(Math.max(0, (int) (availW * percentWidth)));
+                boolean flexControlled = (flexGrow > 0.0f || flexShrink > 0.0f);
+                if (this.baseWidth != pw) {
+                    this.baseWidth = pw;
+                    if (!flexControlled && this.width != pw) {
+                        applyLayoutWidth(pw);
+                    } else if (flexControlled) {
+                        parent.requestLayout();
+                    }
+                } else if (!flexControlled && this.width != pw) {
+                    applyLayoutWidth(pw);
                 }
             }
             if (percentHeight >= 0.0f) {
                 int availH = Math.max(0, parent.getHeight() - parentPad.top - parentPad.bottom - margin.top - margin.bottom);
-                int ph = Math.max(0, (int) (availH * percentHeight));
-                if (this.height != ph) {
-                    setHeight(ph);
+                int ph = clampHeight(Math.max(0, (int) (availH * percentHeight)));
+                boolean flexControlled = (flexGrow > 0.0f || flexShrink > 0.0f);
+                if (this.baseHeight != ph) {
+                    this.baseHeight = ph;
+                    if (!flexControlled && this.height != ph) {
+                        applyLayoutHeight(ph);
+                    } else if (flexControlled) {
+                        parent.requestLayout();
+                    }
+                } else if (!flexControlled && this.height != ph) {
+                    applyLayoutHeight(ph);
                 }
             }
             if (percentX >= 0.0f) {
@@ -217,6 +299,10 @@ public abstract class GuiComponent {
                 this.scrollFocusedComponent = null;
                 this.scrollFocusTimer = 0.0f;
             }
+        }
+        if (needsLayout && layoutManager != null) {
+            layoutManager.layout(this, children);
+            needsLayout = false;
         }
         for (GuiComponent child : children) {
             child.update(deltaTime);
@@ -261,9 +347,12 @@ public abstract class GuiComponent {
         unbinders.add(() -> state.removeListener(listener));
         listener.accept(state.get());
     }
+    protected boolean isClippedBy(IGraphics gfx) {
+        return gfx.isClipped(getAbsoluteX(), getAbsoluteY(), width, height);
+    }
     public void render(IGraphics gfx, int mouseX, int mouseY, float partialTicks) {
         if (!visible) return;
-        if (gfx.isClipped(getAbsoluteX(), getAbsoluteY(), width, height)) return;
+        if (isClippedBy(gfx)) return;
         com.x4yi.x4ui.api.client.font.IFont prevFont = null;
         if (this.font != null) {
             prevFont = gfx.getFont();
@@ -312,13 +401,16 @@ public abstract class GuiComponent {
     public boolean onMouseRelease(int mouseX, int mouseY, int state) {
         if (!visible || !enabled) return false;
         ensureRenderChildren();
-        if (this.parent == null && this.scrollFocusedComponent != null) {
-            if (this.scrollFocusedComponent.onMouseRelease(mouseX, mouseY, state)) {
+        GuiComponent scrollFocused = (this.parent == null) ? this.scrollFocusedComponent : null;
+        if (scrollFocused != null) {
+            if (scrollFocused.onMouseRelease(mouseX, mouseY, state)) {
                 return true;
             }
         }
         for (int i = renderChildren.size() - 1; i >= 0; i--) {
-            if (renderChildren.get(i).onMouseRelease(mouseX, mouseY, state)) {
+            GuiComponent child = renderChildren.get(i);
+            if (child == scrollFocused) continue;
+            if (child.onMouseRelease(mouseX, mouseY, state)) {
                 return true;
             }
         }
@@ -327,13 +419,16 @@ public abstract class GuiComponent {
     public boolean onMouseDrag(int mouseX, int mouseY, int clickedMouseButton, long timeSinceLastClick) {
         if (!visible || !enabled) return false;
         ensureRenderChildren();
-        if (this.parent == null && this.scrollFocusedComponent != null) {
-            if (this.scrollFocusedComponent.onMouseDrag(mouseX, mouseY, clickedMouseButton, timeSinceLastClick)) {
+        GuiComponent scrollFocused = (this.parent == null) ? this.scrollFocusedComponent : null;
+        if (scrollFocused != null) {
+            if (scrollFocused.onMouseDrag(mouseX, mouseY, clickedMouseButton, timeSinceLastClick)) {
                 return true;
             }
         }
         for (int i = renderChildren.size() - 1; i >= 0; i--) {
-            if (renderChildren.get(i).onMouseDrag(mouseX, mouseY, clickedMouseButton, timeSinceLastClick)) {
+            GuiComponent child = renderChildren.get(i);
+            if (child == scrollFocused) continue;
+            if (child.onMouseDrag(mouseX, mouseY, clickedMouseButton, timeSinceLastClick)) {
                 return true;
             }
         }
@@ -410,15 +505,6 @@ public abstract class GuiComponent {
         return mouseX >= absX && mouseX <= absX + width &&
                mouseY >= absY && mouseY <= absY + height;
     }
-    public static void drawRect(int left, int top, int right, int bottom, int color) {
-        net.minecraft.client.gui.Gui.drawRect(left, top, right, bottom, color);
-    }
-    public static void drawBorder(int left, int top, int right, int bottom, int color) {
-        drawRect(left, top, right, top + 1, color);
-        drawRect(left, bottom - 1, right, bottom, color);
-        drawRect(left, top + 1, left + 1, bottom - 1, color);
-        drawRect(right - 1, top + 1, right, bottom - 1, color);
-    }
     protected void drawCenteredString(String text, int x, int y, int color) {
         getFont().draw(text, x - getFont().getWidth(text) / 2.0f, y, color, false);
     }
@@ -431,12 +517,86 @@ public abstract class GuiComponent {
     public int getHeight() { return height; }
     public com.x4yi.x4ui.client.gui.utils.Insets getPadding() { return padding; }
     public com.x4yi.x4ui.client.gui.utils.Insets getMargin() { return margin; }
-    public void setX(int x) { if (this.x != x) { this.x = x; if (parent != null) parent.requestLayout(); } }
-    public void setY(int y) { if (this.y != y) { this.y = y; if (parent != null) parent.requestLayout(); } }
-    public void setWidth(int width) { if (this.width != width) { this.width = width; requestLayout(); if (parent != null) parent.requestLayout(); } }
-    public void setHeight(int height) { if (this.height != height) { this.height = height; requestLayout(); if (parent != null) parent.requestLayout(); } }
-    public void setPadding(com.x4yi.x4ui.client.gui.utils.Insets padding) { this.padding = padding; requestLayout(); }
-    public void setMargin(com.x4yi.x4ui.client.gui.utils.Insets margin) { this.margin = margin; if (parent != null) parent.requestLayout(); }
+    protected void onBoundsChanged() {}
+    public int clampWidth(int w) {
+        return Math.max(minWidth, Math.min(maxWidth, Math.max(0, w)));
+    }
+    public int clampHeight(int h) {
+        return Math.max(minHeight, Math.min(maxHeight, Math.max(0, h)));
+    }
+    public void applyLayoutWidth(int w) {
+        int clamped = clampWidth(w);
+        if (this.width != clamped) {
+            this.width = clamped;
+            requestLayout();
+            onBoundsChanged();
+            if (parent != null) parent.requestLayout();
+        }
+    }
+    public void applyLayoutHeight(int h) {
+        int clamped = clampHeight(h);
+        if (this.height != clamped) {
+            this.height = clamped;
+            requestLayout();
+            onBoundsChanged();
+            if (parent != null) parent.requestLayout();
+        }
+    }
+    public int getBaseWidth() { return baseWidth; }
+    public int getBaseHeight() { return baseHeight; }
+    public int getMinWidth() { return minWidth; }
+    public int getMaxWidth() { return maxWidth; }
+    public int getMinHeight() { return minHeight; }
+    public int getMaxHeight() { return maxHeight; }
+    public float getFlexGrow() { return flexGrow; }
+    public float getFlexShrink() { return flexShrink; }
+    public void setMinWidth(int minWidth) {
+        this.minWidth = Math.max(0, minWidth);
+        if (this.maxWidth < this.minWidth) this.maxWidth = this.minWidth;
+        setWidth(this.width);
+    }
+    public void setMaxWidth(int maxWidth) { this.maxWidth = Math.max(this.minWidth, maxWidth); setWidth(this.width); }
+    public void setMinHeight(int minHeight) {
+        this.minHeight = Math.max(0, minHeight);
+        if (this.maxHeight < this.minHeight) this.maxHeight = this.minHeight;
+        setHeight(this.height);
+    }
+    public void setMaxHeight(int maxHeight) { this.maxHeight = Math.max(this.minHeight, maxHeight); setHeight(this.height); }
+    public void setFlexGrow(float flexGrow) { this.flexGrow = Math.max(0.0f, flexGrow); if (parent != null) parent.requestLayout(); }
+    public void setFlexShrink(float flexShrink) { this.flexShrink = Math.max(0.0f, flexShrink); if (parent != null) parent.requestLayout(); }
+    public GuiComponent withMinWidth(int minWidth) { setMinWidth(minWidth); return this; }
+    public GuiComponent withMaxWidth(int maxWidth) { setMaxWidth(maxWidth); return this; }
+    public GuiComponent withMinHeight(int minHeight) { setMinHeight(minHeight); return this; }
+    public GuiComponent withMaxHeight(int maxHeight) { setMaxHeight(maxHeight); return this; }
+    public GuiComponent withMinSize(int minW, int minH) { setMinWidth(minW); setMinHeight(minH); return this; }
+    public GuiComponent withMaxSize(int maxW, int maxH) { setMaxWidth(maxW); setMaxHeight(maxH); return this; }
+    public GuiComponent withFlexGrow(float flexGrow) { setFlexGrow(flexGrow); return this; }
+    public GuiComponent withFlexShrink(float flexShrink) { setFlexShrink(flexShrink); return this; }
+    public GuiComponent withFlex(float grow, float shrink) { setFlexGrow(grow); setFlexShrink(shrink); return this; }
+    public void setX(int x) { if (this.x != x) { this.x = x; invalidateAbs(); onBoundsChanged(); if (parent != null) parent.requestLayout(); } }
+    public void setY(int y) { if (this.y != y) { this.y = y; invalidateAbs(); onBoundsChanged(); if (parent != null) parent.requestLayout(); } }
+    public void setWidth(int width) {
+        int clamped = clampWidth(width);
+        this.baseWidth = clamped;
+        if (this.width != clamped) {
+            this.width = clamped;
+            requestLayout();
+            onBoundsChanged();
+            if (parent != null) parent.requestLayout();
+        }
+    }
+    public void setHeight(int height) {
+        int clamped = clampHeight(height);
+        this.baseHeight = clamped;
+        if (this.height != clamped) {
+            this.height = clamped;
+            requestLayout();
+            onBoundsChanged();
+            if (parent != null) parent.requestLayout();
+        }
+    }
+    public void setPadding(com.x4yi.x4ui.client.gui.utils.Insets padding) { this.padding = padding != null ? padding : com.x4yi.x4ui.client.gui.utils.Insets.ZERO; requestLayout(); }
+    public void setMargin(com.x4yi.x4ui.client.gui.utils.Insets margin) { this.margin = margin != null ? margin : com.x4yi.x4ui.client.gui.utils.Insets.ZERO; if (parent != null) parent.requestLayout(); }
     public boolean isVisible() { return visible; }
     public boolean isEffectivelyVisible() {
         GuiComponent current = this;

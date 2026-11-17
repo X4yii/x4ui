@@ -25,6 +25,8 @@ public final class GuiOverlayManager {
     public static final GuiOverlayManager INSTANCE = new GuiOverlayManager();
     private final List<IGuiOverlay> registeredOverlays = new CopyOnWriteArrayList<>();
     private GuiScreen currentScreen = null;
+    private GuiScreen cachedScreen = null;
+    private List<IGuiOverlay> cachedActiveOverlays = Collections.emptyList();
     private long lastRenderTime = 0;
     private boolean needsLayout = true;
     private OverlayContext cachedContext = null;
@@ -32,14 +34,20 @@ public final class GuiOverlayManager {
         this.needsLayout = true;
     }
     private GuiOverlayManager() {}
+    private void invalidateActiveCache() {
+        this.cachedScreen = null;
+        this.cachedActiveOverlays = Collections.emptyList();
+    }
     public void registerOverlay(IGuiOverlay overlay) {
         if (overlay != null && !registeredOverlays.contains(overlay)) {
             registeredOverlays.add(overlay);
+            invalidateActiveCache();
         }
     }
     public void unregisterOverlay(IGuiOverlay overlay) {
         if (overlay != null) {
             registeredOverlays.remove(overlay);
+            invalidateActiveCache();
         }
     }
     public List<IGuiOverlay> getRegisteredOverlays() {
@@ -49,13 +57,18 @@ public final class GuiOverlayManager {
         if (screen == null || registeredOverlays.isEmpty()) {
             return Collections.emptyList();
         }
+        if (screen == cachedScreen) {
+            return cachedActiveOverlays;
+        }
         List<IGuiOverlay> matches = new ArrayList<>();
         for (IGuiOverlay overlay : registeredOverlays) {
             if (overlay.matches(screen)) {
                 matches.add(overlay);
             }
         }
-        return matches;
+        this.cachedScreen = screen;
+        this.cachedActiveOverlays = matches.isEmpty() ? Collections.emptyList() : Collections.unmodifiableList(matches);
+        return this.cachedActiveOverlays;
     }
     public List<Rectangle> getExclusionAreas(GuiContainer container) {
         if (container == null) return Collections.emptyList();
@@ -142,14 +155,24 @@ public final class GuiOverlayManager {
                     if (tooltipSource.getTooltipComponent() != null) {
                         activeTheme.drawTooltipComponent(gfx, tooltipSource.getTooltipComponent(), mouseX, mouseY, screen.width, screen.height);
                     } else if (tooltipSource.getTooltipText() != null) {
-                        String text = tooltipSource.getTooltipText();
-                        List<String> lines = (text.indexOf('\n') == -1) ?
-                                Collections.singletonList(text) : Arrays.asList(text.split("\n"));
-                        activeTheme.drawTooltip(gfx, lines, mouseX, mouseY, screen.width, screen.height);
+                        activeTheme.drawTooltip(gfx, getCachedTooltipLines(tooltipSource.getTooltipText()), mouseX, mouseY, screen.width, screen.height);
                     }
                 }
             }
         }
+    }
+
+    private String cachedOverlayTooltipText = null;
+    private List<String> cachedOverlayTooltipLines = Collections.emptyList();
+
+    private List<String> getCachedTooltipLines(String text) {
+        if (!text.equals(cachedOverlayTooltipText)) {
+            cachedOverlayTooltipText = text;
+            cachedOverlayTooltipLines = (text.indexOf('\n') == -1)
+                    ? Collections.singletonList(text)
+                    : Arrays.asList(text.split("\n"));
+        }
+        return cachedOverlayTooltipLines;
     }
     @SubscribeEvent(priority = EventPriority.HIGH)
     public void onMouseInput(GuiScreenEvent.MouseInputEvent.Pre event) {
@@ -200,7 +223,7 @@ public final class GuiOverlayManager {
         } else if (UIInput.isMouseButtonDown(0)) {
             for (IGuiOverlay overlay : active) {
                 GuiComponent root = overlay.getRootComponent();
-                if (root != null && root.isVisible() && root.contains(mouseX, mouseY)) {
+                if (root != null && root.isVisible()) {
                     root.onMouseDrag(mouseX, mouseY, 0, 0);
                 }
             }
@@ -236,6 +259,7 @@ public final class GuiOverlayManager {
             }
             GLGraphics.INSTANCE.clearClip();
         }
+        invalidateActiveCache();
         this.currentScreen = nextScreen;
     }
 }

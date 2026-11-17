@@ -32,7 +32,12 @@ public class GuiToastManager implements IGuiOverlay {
     public void showToast(GuiToast toast) {
         pendingToasts.add(toast);
     }
+    private long lastHudFrameNanos = 0L;
+
     public void update(float deltaTime) {
+        if (pendingToasts.isEmpty() && activeToasts.isEmpty()) {
+            return;
+        }
         if (!pendingToasts.isEmpty()) {
             for (GuiToast toast : pendingToasts) {
                 rootComponent.addChild(toast);
@@ -40,7 +45,11 @@ public class GuiToastManager implements IGuiOverlay {
             }
             pendingToasts.clear();
         }
-        calculateLayouts();
+        Minecraft mc = Minecraft.getMinecraft();
+        ScaledResolution sr = mc != null ? new ScaledResolution(mc) : null;
+        int screenW = sr != null ? sr.getScaledWidth() : 0;
+        int screenH = sr != null ? sr.getScaledHeight() : 0;
+        calculateLayouts(screenW, screenH);
         Iterator<GuiToast> it = activeToasts.iterator();
         while (it.hasNext()) {
             GuiToast toast = it.next();
@@ -65,13 +74,13 @@ public class GuiToastManager implements IGuiOverlay {
                 case BOTTOM_LEFT:
                 case BOTTOM_CENTER:
                 case BOTTOM_RIGHT:
-                    offY = getScreenHeight() + 10;
+                    offY = screenH + 10;
                     break;
                 case LEFT_CENTER:
                     offX = -toast.getWidth() - 10;
                     break;
                 case RIGHT_CENTER:
-                    offX = getScreenWidth() + 10;
+                    offX = screenW + 10;
                     break;
             }
             int currentX = (int) (offX + (toast.currentBaseX - offX) * progress);
@@ -85,12 +94,10 @@ public class GuiToastManager implements IGuiOverlay {
             }
         }
     }
-    private void calculateLayouts() {
+    private void calculateLayouts(int screenWidth, int screenHeight) {
         int paddingX = 10;
         int paddingY = 10;
         int gap = 8;
-        int screenWidth = getScreenWidth();
-        int screenHeight = getScreenHeight();
         int topLeftY = paddingY;
         int topRightY = paddingY;
         int topCenterY = paddingY;
@@ -150,24 +157,24 @@ public class GuiToastManager implements IGuiOverlay {
             toast.setTargetPosition(x, y);
         }
     }
-    private int getScreenWidth() {
-        Minecraft mc = Minecraft.getMinecraft();
-        return mc != null ? new ScaledResolution(mc).getScaledWidth() : 0;
-    }
-    private int getScreenHeight() {
-        Minecraft mc = Minecraft.getMinecraft();
-        return mc != null ? new ScaledResolution(mc).getScaledHeight() : 0;
-    }
     @SubscribeEvent
     public void onRenderGameOverlay(RenderGameOverlayEvent.Post event) {
         if (event.getType() != RenderGameOverlayEvent.ElementType.ALL) return;
+        if (pendingToasts.isEmpty() && activeToasts.isEmpty()) {
+            lastHudFrameNanos = 0L;
+            return;
+        }
         Minecraft mc = Minecraft.getMinecraft();
-        if (mc.currentScreen != null) return;
-        update(GuiBaseScreen.deltaTime > 0 ? GuiBaseScreen.deltaTime : 0.016f);
+        if (mc == null || mc.currentScreen != null) return;
+        long now = System.nanoTime();
+        float dt = (lastHudFrameNanos == 0L) ? 0.016f : Math.min(0.1f, (now - lastHudFrameNanos) / 1_000_000_000.0f);
+        lastHudFrameNanos = now;
+        update(dt);
         if (activeToasts.isEmpty()) return;
+        ScaledResolution sr = new ScaledResolution(mc);
         GLGraphics gfx = GLGraphics.INSTANCE;
-        rootComponent.setWidth(getScreenWidth());
-        rootComponent.setHeight(getScreenHeight());
+        rootComponent.setWidth(sr.getScaledWidth());
+        rootComponent.setHeight(sr.getScaledHeight());
         rootComponent.render(gfx, -1, -1, event.getPartialTicks());
     }
     @Override

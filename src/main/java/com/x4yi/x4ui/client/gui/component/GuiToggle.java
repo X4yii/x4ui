@@ -21,6 +21,9 @@ public class GuiToggle extends GuiComponent {
             bindState(state);
         }
     }
+    public static GuiToggle of(String label, State<Boolean> state) {
+        return (GuiToggle) new GuiToggle(0, 0, 140, 20, label, state).withPercentWidth(1.0f);
+    }
     public GuiToggle bindState(State<Boolean> state) {
         this.boundState = state;
         this.state = state != null ? state.get() : false;
@@ -81,8 +84,9 @@ public class GuiToggle extends GuiComponent {
     }
     @Override
     public boolean onMouseClick(int mouseX, int mouseY, int mouseButton) {
+        if (!visible || !enabled) return false;
         if (!super.onMouseClick(mouseX, mouseY, mouseButton)) {
-            if (isMouseOver(mouseX, mouseY) && enabled && mouseButton == 0) {
+            if (isMouseOver(mouseX, mouseY) && mouseButton == 0) {
                 if (mc != null && mc.getSoundHandler() != null) {
                     mc.getSoundHandler().playSound(
                         net.minecraft.client.audio.PositionedSoundRecord.getMasterRecord(

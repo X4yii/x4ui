@@ -18,6 +18,8 @@ public class GuiVirtualList<T> extends GuiScrollPanel {
     private final Queue<GuiComponent> recyclePool = new ArrayDeque<>();
     private int lastStartIndex = -1;
     private int lastEndIndex = -1;
+    private int lastWidth = -1;
+    private int lastHeight = -1;
     public GuiVirtualList(int x, int y, int width, int height, int itemHeight, Function<T, GuiComponent> builder) {
         this(x, y, width, height, itemHeight, builder, null);
     }
@@ -28,21 +30,31 @@ public class GuiVirtualList<T> extends GuiScrollPanel {
         this.itemBinder = binder;
         this.contentPanel.setFlexDirection(FlexDirection.ABSOLUTE);
     }
+    public static <T> GuiVirtualList<T> of(int height, int itemHeight, Function<T, GuiComponent> builder, BiConsumer<GuiComponent, T> binder) {
+        GuiVirtualList<T> list = new GuiVirtualList<>(0, 0, 0, height, itemHeight, builder, binder);
+        list.withPercentWidth(1.0f);
+        return list;
+    }
     public void setItems(List<T> newItems) {
         this.items.clear();
         if (newItems != null) {
             this.items.addAll(newItems);
         }
         for (GuiComponent comp : activeComponents.values()) {
-            this.contentPanel.removeChild(comp);
-            comp.destroy();
+            if (itemBinder != null) {
+                comp.setVisible(false);
+                recyclePool.offer(comp);
+            } else {
+                this.contentPanel.removeChild(comp);
+            }
         }
         activeComponents.clear();
-        for (GuiComponent comp : recyclePool) {
-            this.contentPanel.removeChild(comp);
-            comp.destroy();
+        if (itemBinder == null) {
+            for (GuiComponent comp : recyclePool) {
+                this.contentPanel.removeChild(comp);
+            }
+            recyclePool.clear();
         }
-        recyclePool.clear();
         this.lastStartIndex = -1;
         this.lastEndIndex = -1;
         int totalHeight = items.size() * itemHeight;
@@ -66,9 +78,13 @@ public class GuiVirtualList<T> extends GuiScrollPanel {
         int scrollViewY = (int) scrollY;
         int startIndex = Math.max(0, scrollViewY / itemHeight);
         int endIndex = Math.min(items.size(), (scrollViewY + this.height) / itemHeight + 2);
-        if (startIndex == lastStartIndex && endIndex == lastEndIndex) {
+        if (startIndex == lastStartIndex && endIndex == lastEndIndex
+                && this.width == lastWidth && this.height == lastHeight) {
             return;
         }
+        boolean widthChanged = this.width != lastWidth;
+        this.lastWidth = this.width;
+        this.lastHeight = this.height;
         Iterator<Map.Entry<Integer, GuiComponent>> it = activeComponents.entrySet().iterator();
         while (it.hasNext()) {
             Map.Entry<Integer, GuiComponent> entry = it.next();
@@ -81,8 +97,9 @@ public class GuiVirtualList<T> extends GuiScrollPanel {
                     recyclePool.offer(comp);
                 } else {
                     this.contentPanel.removeChild(comp);
-                    comp.destroy();
                 }
+            } else if (widthChanged) {
+                entry.getValue().requestLayout();
             }
         }
         for (int i = startIndex; i < endIndex; i++) {

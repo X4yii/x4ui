@@ -1,24 +1,26 @@
 package com.x4yi.x4ui.common.platform;
 
 import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.nio.ByteBuffer;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ThreadFactory;
-import sun.misc.Unsafe;
 
 public final class PlatformBridge {
-    private static final Unsafe UNSAFE;
+    private static final Object UNSAFE;
+    private static final Method INVOKE_CLEANER;
 
     static {
-        Unsafe u = null;
+        Object unsafeObj = null;
+        Method cleanerMethod = null;
         try {
-            Field f = Unsafe.class.getDeclaredField("theUnsafe");
+            Class<?> unsafeClass = Class.forName("sun.misc.Unsafe");
+            Field f = unsafeClass.getDeclaredField("theUnsafe");
             f.setAccessible(true);
-            u = (Unsafe) f.get(null);
+            unsafeObj = f.get(null);
+            cleanerMethod = unsafeClass.getMethod("invokeCleaner", ByteBuffer.class);
         } catch (Throwable ignored) {
         }
-        UNSAFE = u;
+        UNSAFE = unsafeObj;
+        INVOKE_CLEANER = cleanerMethod;
     }
 
     private PlatformBridge() {}
@@ -54,17 +56,11 @@ public final class PlatformBridge {
         }
     }
 
-    public static ExecutorService newIoExecutor(String namePrefix, int fixedThreads) {
-        ThreadFactory factory = Thread.ofVirtual().name(namePrefix + "-", 1).factory();
-        return Executors.newThreadPerTaskExecutor(factory);
-    }
-
     public static void cleanDirectBuffer(ByteBuffer buffer) {
-        if (buffer == null || !buffer.isDirect() || UNSAFE == null) return;
+        if (buffer == null || !buffer.isDirect() || UNSAFE == null || INVOKE_CLEANER == null) return;
         try {
-            UNSAFE.invokeCleaner(buffer);
+            INVOKE_CLEANER.invoke(UNSAFE, buffer);
         } catch (Throwable ignored) {
         }
     }
 }
-

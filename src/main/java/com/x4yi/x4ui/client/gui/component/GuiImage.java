@@ -32,6 +32,12 @@ public class GuiImage extends GuiComponent {
         super(x, y, width, height);
         setUrl(url);
     }
+    public static GuiImage of(ResourceLocation texture, int width, int height) {
+        return new GuiImage(0, 0, width, height, texture);
+    }
+    public static GuiImage ofUrl(String url, int width, int height) {
+        return new GuiImage(0, 0, width, height, url);
+    }
     public GuiImage withNineSlice(NineSliceConfig config) {
         this.nineSliceConfig = config;
         this.nineSliceEnabled = (config != null);
@@ -175,12 +181,7 @@ public class GuiImage extends GuiComponent {
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        if (texture != null && url != null) {
-            Minecraft client = Minecraft.getMinecraft();
-            if (client != null && client.getTextureManager() != null) {
-                client.getTextureManager().deleteTexture(texture);
-            }
-            texture = null;
-        }
+        // Do not delete shared cached URL textures from TextureManager, as other GuiImage instances may reference them.
+        texture = null;
     }
 }

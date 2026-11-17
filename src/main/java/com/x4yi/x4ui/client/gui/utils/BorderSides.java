@@ -1,8 +1,5 @@
 package com.x4yi.x4ui.client.gui.utils;
 
-/**
- * Bitmask constants and helpers for per-side rectangular borders.
- */
 public final class BorderSides {
     public static final int NONE = 0;
     public static final int TOP = 1;

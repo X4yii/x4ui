@@ -20,6 +20,9 @@ public class GuiTextInput extends GuiComponent {
     public GuiTextInput(int x, int y, int width, int height) {
         super(x, y, width, height);
     }
+    public static GuiTextInput of(com.x4yi.x4ui.common.State<String> state) {
+        return (GuiTextInput) new GuiTextInput(0, 0, 140, 20, state).withPercentWidth(1.0f);
+    }
     public GuiTextInput(int x, int y, int width, int height, com.x4yi.x4ui.common.State<String> state) {
         super(x, y, width, height);
         bindState(state);
@@ -68,8 +71,13 @@ public class GuiTextInput extends GuiComponent {
         }
     }
     public String getText() { return text; }
-    public void setPlaceholder(String placeholder) { this.placeholder = placeholder; }
-    public void setMaxLength(int max) { this.maxLength = max; }
+    public void setPlaceholder(String placeholder) { this.placeholder = placeholder != null ? placeholder : ""; }
+    public void setMaxLength(int max) {
+        this.maxLength = Math.max(0, max);
+        if (this.text.length() > this.maxLength) {
+            setText(this.text.substring(0, this.maxLength));
+        }
+    }
     public void setCursorPosition(int pos) {
         this.cursorPosition = MathHelper.clamp(pos, 0, this.text.length());
         this.selectionEnd = this.cursorPosition;
@@ -83,10 +91,14 @@ public class GuiTextInput extends GuiComponent {
         if (this.cursorPosition < this.lineScrollOffset) {
             this.lineScrollOffset = this.cursorPosition;
         }
-        String visible = getFont().trimStringToWidth(this.text.substring(this.lineScrollOffset), innerWidth);
-        int visibleEnd = this.lineScrollOffset + visible.length();
-        if (this.cursorPosition > visibleEnd) {
-            this.lineScrollOffset += this.cursorPosition - visibleEnd;
+        com.x4yi.x4ui.api.client.font.IFont font = getFont();
+        while (this.cursorPosition > this.lineScrollOffset) {
+            String visible = font.trimStringToWidth(this.text.substring(this.lineScrollOffset), innerWidth);
+            int visibleEnd = this.lineScrollOffset + visible.length();
+            if (this.cursorPosition <= visibleEnd) {
+                break;
+            }
+            this.lineScrollOffset++;
         }
     }
     @Override
@@ -151,9 +163,13 @@ public class GuiTextInput extends GuiComponent {
     }
     @Override
     public boolean onMouseClick(int mouseX, int mouseY, int mouseButton) {
+        if (!visible || !enabled) {
+            if (isFocused()) this.clearFocus();
+            return false;
+        }
         if (!super.onMouseClick(mouseX, mouseY, mouseButton)) {
             boolean wasFocused = isFocused();
-            boolean clickedOnUs = isMouseOver(mouseX, mouseY) && enabled && mouseButton == 0;
+            boolean clickedOnUs = isMouseOver(mouseX, mouseY) && mouseButton == 0;
             if (clickedOnUs) {
                 this.requestFocus();
                 int idx = getCharIndexAtMouseX(mouseX);

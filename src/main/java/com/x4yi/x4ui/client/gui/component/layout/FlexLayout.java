@@ -153,8 +153,9 @@ public class FlexLayout implements ILayoutManager {
             int usedMain = totalBaseMain + totalMarginsMain + totalGaps;
             int availableMain = (flexDirection == FlexDirection.HORIZONTAL) ? innerW : innerH;
             int deltaMain = availableMain - usedMain;
-            boolean canGrow = !(flexDirection == FlexDirection.HORIZONTAL ? shouldAdjustParentW : shouldAdjustParentH)
-                    || (hasSpacer && availableMain > 0);
+            boolean adjustMain = (flexDirection == FlexDirection.HORIZONTAL) ? shouldAdjustParentW : shouldAdjustParentH;
+            boolean canGrow = !adjustMain || (hasSpacer && availableMain > 0);
+            boolean canShrink = !adjustMain;
 
             if (deltaMain > 0 && canGrow) {
                 int remaining = deltaMain;
@@ -192,7 +193,7 @@ public class FlexLayout implements ILayoutManager {
                     remaining -= distributedThisPass;
                     if (distributedThisPass == 0 && !hitBound) break;
                 }
-            } else if (deltaMain < 0) {
+            } else if (deltaMain < 0 && canShrink) {
                 int remainingOverflow = -deltaMain;
                 while (remainingOverflow > 0) {
                     double totalShrink = 0.0;
@@ -234,7 +235,7 @@ public class FlexLayout implements ILayoutManager {
             for (int i = 0; i < n; i++) {
                 finalUsedMain += resolvedMain[i];
             }
-            int freeMain = Math.max(0, availableMain - finalUsedMain);
+            int freeMain = adjustMain ? 0 : Math.max(0, availableMain - finalUsedMain);
             int mainOffset = 0;
             if (freeMain > 0) {
                 if (justifyContent == FlexAlign.CENTER) {
@@ -294,13 +295,13 @@ public class FlexLayout implements ILayoutManager {
             }
 
             if (flexDirection == FlexDirection.VERTICAL) {
-                int contentH = (visible.isEmpty() ? padding.top : (currentMain - gap)) + padding.bottom;
+                int contentH = padding.top + (visible.isEmpty() ? 0 : finalUsedMain) + padding.bottom;
                 if (shouldAdjustParentH) parent.applyLayoutHeight(contentH);
-                if (parent.getWidth() == 0 && parent.getPercentWidth() < 0) {
+                if (shouldAdjustParentW || (parent.getWidth() == 0 && parent.getPercentWidth() < 0)) {
                     parent.applyLayoutWidth(padding.left + maxCross + padding.right);
                 }
             } else {
-                int contentW = (visible.isEmpty() ? padding.left : (currentMain - gap)) + padding.right;
+                int contentW = padding.left + (visible.isEmpty() ? 0 : finalUsedMain) + padding.right;
                 if (shouldAdjustParentW) parent.applyLayoutWidth(contentW);
                 if (shouldAdjustParentH) parent.applyLayoutHeight(padding.top + maxCross + padding.bottom);
             }
@@ -338,9 +339,9 @@ public class FlexLayout implements ILayoutManager {
             }
         }
         if (flexDirection == FlexDirection.VERTICAL && shouldAdjustParentW) {
-            parent.setWidth(currentX + maxLineSize + padding.right);
+            parent.applyLayoutWidth(currentX + maxLineSize + padding.right);
         } else if (flexDirection == FlexDirection.HORIZONTAL && shouldAdjustParentH) {
-            parent.setHeight(currentY + maxLineSize + padding.bottom);
+            parent.applyLayoutHeight(currentY + maxLineSize + padding.bottom);
         }
     }
 }

@@ -14,6 +14,9 @@ public class GuiButton extends GuiComponent {
         this.text = text;
         this.onClick = onClick;
     }
+    public static GuiButton of(String text, Runnable onClick) {
+        return new GuiButton(0, 0, 100, 22, text, onClick);
+    }
     public GuiButton withVariant(Variant variant) { this.variant = variant; return this; }
     public GuiButton withSelected(boolean selected) { this.selected = selected; return this; }
     public void setSelected(boolean selected) { this.selected = selected; }
@@ -110,8 +113,9 @@ public class GuiButton extends GuiComponent {
     }
     @Override
     public boolean onMouseClick(int mouseX, int mouseY, int mouseButton) {
+        if (!visible || !enabled) return false;
         if (!super.onMouseClick(mouseX, mouseY, mouseButton)) {
-            if (isMouseOver(mouseX, mouseY) && enabled && mouseButton == 0) {
+            if (isMouseOver(mouseX, mouseY) && mouseButton == 0) {
                 playClickSound();
                 if (onClick != null) {
                     onClick.run();
@@ -122,11 +126,13 @@ public class GuiButton extends GuiComponent {
         return false;
     }
     protected void playClickSound() {
-        mc.getSoundHandler().playSound(
-            net.minecraft.client.audio.PositionedSoundRecord.getMasterRecord(
-                net.minecraft.init.SoundEvents.UI_BUTTON_CLICK, 1.0F
-            )
-        );
+        if (mc != null && mc.getSoundHandler() != null) {
+            mc.getSoundHandler().playSound(
+                net.minecraft.client.audio.PositionedSoundRecord.getMasterRecord(
+                    net.minecraft.init.SoundEvents.UI_BUTTON_CLICK, 1.0F
+                )
+            );
+        }
     }
     private static int brightenColor(int color, float amount) {
         int a = (color >>> 24) & 0xFF;

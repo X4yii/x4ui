@@ -25,6 +25,12 @@ public class GuiModelRender extends GuiComponent {
     public GuiModelRender(int x, int y, int width, int height) {
         super(x, y, width, height);
     }
+    public static GuiModelRender of(EntityLivingBase entity, int width, int height) {
+        return new GuiModelRender(0, 0, width, height).setEntity(entity);
+    }
+    public static GuiModelRender of(ItemStack itemStack, int width, int height) {
+        return new GuiModelRender(0, 0, width, height).setItemStack(itemStack);
+    }
     public GuiModelRender setEntity(EntityLivingBase entity) {
         this.entity = entity;
         this.itemStack = null;
@@ -140,31 +146,32 @@ public class GuiModelRender extends GuiComponent {
                     rendermanager.setPlayerViewY(180.0F);
                     rendermanager.setRenderShadow(false);
                     rendermanager.renderEntity(entity, 0.0D, 0.0D, 0.0D, 0.0F, enableEntityAnimations ? partialTicks : 1.0F, false);
-                    rendermanager.setRenderShadow(true);
                 } finally {
+                    rendermanager.setRenderShadow(true);
                     rendermanager.setPlayerViewY(prevViewY);
+                    entity.renderYawOffset = f;
+                    entity.prevRenderYawOffset = fp;
+                    entity.rotationYaw = f1;
+                    entity.prevRotationYaw = f1p;
+                    entity.rotationPitch = f2;
+                    entity.prevRotationPitch = f2p;
+                    entity.prevRotationYawHead = f3;
+                    entity.rotationYawHead = f4;
+                    GlStateManager.popMatrix();
+                    RenderHelper.disableStandardItemLighting();
+                    GlStateManager.disableRescaleNormal();
+                    GlStateManager.disableColorMaterial();
+                    GlStateManager.setActiveTexture(OpenGlHelper.lightmapTexUnit);
+                    GlStateManager.disableTexture2D();
+                    GlStateManager.setActiveTexture(OpenGlHelper.defaultTexUnit);
+                    GlStateManager.disableDepth();
                 }
-                entity.renderYawOffset = f;
-                entity.prevRenderYawOffset = fp;
-                entity.rotationYaw = f1;
-                entity.prevRotationYaw = f1p;
-                entity.rotationPitch = f2;
-                entity.prevRotationPitch = f2p;
-                entity.prevRotationYawHead = f3;
-                entity.rotationYawHead = f4;
-                GlStateManager.popMatrix();
-                RenderHelper.disableStandardItemLighting();
-                GlStateManager.disableRescaleNormal();
-                GlStateManager.disableColorMaterial();
-                GlStateManager.setActiveTexture(OpenGlHelper.lightmapTexUnit);
-                GlStateManager.disableTexture2D();
-                GlStateManager.setActiveTexture(OpenGlHelper.defaultTexUnit);
-                GlStateManager.disableDepth();
             });
         }
     }
     @Override
     public boolean onMouseClick(int mouseX, int mouseY, int mouseButton) {
+        if (!visible || !enabled) return false;
         if (super.onMouseClick(mouseX, mouseY, mouseButton)) return true;
         if (allowDragRotation && isMouseOver(mouseX, mouseY) && mouseButton == 0) {
             dragging = true;
@@ -176,6 +183,7 @@ public class GuiModelRender extends GuiComponent {
     }
     @Override
     public boolean onMouseDrag(int mouseX, int mouseY, int clickedMouseButton, long timeSinceLastClick) {
+        if (!visible || !enabled) return false;
         if (super.onMouseDrag(mouseX, mouseY, clickedMouseButton, timeSinceLastClick)) return true;
         if (dragging && allowDragRotation) {
             int dx = mouseX - lastMouseX;

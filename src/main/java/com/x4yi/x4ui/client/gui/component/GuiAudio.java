@@ -78,27 +78,38 @@ public class GuiAudio extends GuiComponent {
         resetAudio();
     }
 
+    private volatile boolean destroyed = false;
+    private final java.util.concurrent.atomic.AtomicInteger loadGeneration = new java.util.concurrent.atomic.AtomicInteger(0);
+
     @Override
     protected void onDestroy() {
+        destroyed = true;
+        loadGeneration.incrementAndGet();
         super.onDestroy();
         resetAudio();
     }
 
     private void resetAudio() {
+        loadGeneration.incrementAndGet();
         loading = false;
         mediaPlayer.stop();
     }
 
     private void initAudio() {
-        if (audioUrl == null || audioUrl.trim().isEmpty()) return;
+        if (destroyed || audioUrl == null || audioUrl.trim().isEmpty()) return;
         if (!MediaManager.isFFmpegAvailable()) {
             loadError = "FFmpeg unavailable for audio";
             return;
         }
+        final int gen = loadGeneration.incrementAndGet();
         loading = true;
         loadError = null;
         final String requestedUrl = audioUrl;
         MediaPipeline.getInstance().obtainMedia("global", requestedUrl, null).whenComplete((file, err) -> {
+            if (destroyed || loadGeneration.get() != gen) {
+                loading = false;
+                return;
+            }
             loading = false;
             if (err != null) {
                 loadError = err.getMessage();
@@ -107,19 +118,31 @@ public class GuiAudio extends GuiComponent {
             if (!requestedUrl.equals(this.audioUrl)) {
                 return;
             }
+            FFmpegAudioDecoder audioDecoder = null;
             try {
-                FFmpegAudioDecoder audioDecoder = new FFmpegAudioDecoder();
+                audioDecoder = new FFmpegAudioDecoder();
                 audioDecoder.setVolume(volume);
                 audioDecoder.setMuted(muted);
                 audioDecoder.init(file.getAbsolutePath());
+                if (destroyed || loadGeneration.get() != gen) {
+                    audioDecoder.close();
+                    return;
+                }
                 mediaPlayer.setAudioDecoder(audioDecoder);
                 Minecraft mc = Minecraft.getMinecraft();
                 if (mc != null) {
-                    mc.addScheduledTask(mediaPlayer::play);
+                    mc.addScheduledTask(() -> {
+                        if (!destroyed && loadGeneration.get() == gen) {
+                            mediaPlayer.play();
+                        } else {
+                            mediaPlayer.stop();
+                        }
+                    });
                 } else {
                     mediaPlayer.play();
                 }
             } catch (Exception e) {
+                if (audioDecoder != null) audioDecoder.close();
                 loadError = e.getMessage();
             }
         });

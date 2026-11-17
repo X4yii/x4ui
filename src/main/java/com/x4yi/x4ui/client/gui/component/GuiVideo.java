@@ -5,8 +5,6 @@ import com.x4yi.x4ui.impl.client.gui.GLGraphics;
 import com.x4yi.x4ui.impl.client.media.MediaPlayer;
 import com.x4yi.x4ui.api.client.media.IVideoDecoder;
 import com.x4yi.x4ui.api.client.media.VideoFrame;
-import com.x4yi.x4ui.impl.client.media.backend.ffmpeg.FFmpegProcessDecoder;
-import com.x4yi.x4ui.impl.client.media.backend.jcodec.JCodecVideoDecoder;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import java.util.function.Consumer;
@@ -43,6 +41,11 @@ public class GuiVideo extends GuiComponent {
         super(x, y, width, height);
         mediaPlayer = new MediaPlayer();
         setControlsLayout(new com.x4yi.x4ui.client.gui.component.video.DefaultVideoControlsLayout());
+    }
+    public static GuiVideo of(String url, int width, int height) {
+        GuiVideo v = new GuiVideo(0, 0, width, height);
+        v.setVideoUrl(url);
+        return v;
     }
     public GuiVideo setVideoUrl(String url) {
         this.videoUrl = url;
@@ -144,8 +147,13 @@ public class GuiVideo extends GuiComponent {
     public void stop() {
         resetVideo();
     }
+    private volatile boolean destroyed = false;
+    private final java.util.concurrent.atomic.AtomicInteger loadGeneration = new java.util.concurrent.atomic.AtomicInteger(0);
+
     @Override
     protected void onDestroy() {
+        destroyed = true;
+        loadGeneration.incrementAndGet();
         super.onDestroy();
         resetVideo();
         if (controlsLayout != null) {
@@ -154,14 +162,18 @@ public class GuiVideo extends GuiComponent {
         }
     }
     private void resetVideo() {
+        loadGeneration.incrementAndGet();
         mediaPlayer.stop();
         if (glTextureId != -1) {
             final int toDelete = glTextureId;
             glTextureId = -1;
-            if (net.minecraft.client.Minecraft.getMinecraft().isCallingFromMinecraftThread()) {
-                GlStateManager.deleteTexture(toDelete);
-            } else {
-                net.minecraft.client.Minecraft.getMinecraft().addScheduledTask(() -> GlStateManager.deleteTexture(toDelete));
+            net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getMinecraft();
+            if (mc != null) {
+                if (mc.isCallingFromMinecraftThread()) {
+                    GlStateManager.deleteTexture(toDelete);
+                } else {
+                    mc.addScheduledTask(() -> GlStateManager.deleteTexture(toDelete));
+                }
             }
         }
         hasUploadedFirstFrame = false;
@@ -190,14 +202,22 @@ public class GuiVideo extends GuiComponent {
     }
 
     private void initVideo() {
-        if (videoUrl == null) return;
+        if (videoUrl == null || destroyed) return;
+        final int gen = loadGeneration.incrementAndGet();
         this.videoError = null;
         setLoadingState("Loading", -1);
         com.x4yi.x4ui.impl.client.media.MediaPipeline.getInstance().obtainMedia("global", videoUrl, (status, percent) -> {
-            net.minecraft.client.Minecraft.getMinecraft().addScheduledTask(() -> {
-                setLoadingState(status, percent);
-            });
+            if (destroyed || loadGeneration.get() != gen) return;
+            net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getMinecraft();
+            if (mc != null) {
+                mc.addScheduledTask(() -> {
+                    if (!destroyed && loadGeneration.get() == gen) {
+                        setLoadingState(status, percent);
+                    }
+                });
+            }
         }).whenComplete((file, err) -> {
+            if (destroyed || loadGeneration.get() != gen) return;
             if (err != null) {
                 reportVideoError(err.getMessage() != null ? err.getMessage() : "Download/cache failed", err);
                 return;
@@ -206,47 +226,86 @@ public class GuiVideo extends GuiComponent {
                 reportVideoError("Resolved media file does not exist", null);
                 return;
             }
-            net.minecraft.client.Minecraft.getMinecraft().addScheduledTask(this::clearLoadingState);
+            net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getMinecraft();
+            if (mc != null) {
+                mc.addScheduledTask(this::clearLoadingState);
+            }
             String localPath = file.getAbsolutePath();
+            IVideoDecoder decoder = null;
+            com.x4yi.x4ui.impl.client.media.backend.ffmpeg.FFmpegAudioDecoder audioDecoder = null;
             try {
                 boolean useFfmpeg = com.x4yi.x4ui.impl.client.media.MediaManager.isFFmpegAvailable();
-                IVideoDecoder decoder = useFfmpeg ?
+                decoder = useFfmpeg ?
                         new com.x4yi.x4ui.impl.client.media.backend.ffmpeg.DirectMemoryVideoDecoder() :
                         new com.x4yi.x4ui.impl.client.media.backend.jcodec.JCodecVideoDecoder();
                 decoder.init(localPath);
-                if (decoder.isError()) {
-                    reportVideoError(decoder.getErrorMessage(), null);
+                if (destroyed || loadGeneration.get() != gen) {
+                    decoder.close();
                     return;
                 }
-                mediaPlayer.setVideoDecoder(decoder);
+                if (decoder.isError()) {
+                    String errMsg = decoder.getErrorMessage();
+                    decoder.close();
+                    reportVideoError(errMsg, null);
+                    return;
+                }
                 if (audioEnabled && useFfmpeg) {
                     try {
-                        com.x4yi.x4ui.impl.client.media.backend.ffmpeg.FFmpegAudioDecoder audioDecoder = new com.x4yi.x4ui.impl.client.media.backend.ffmpeg.FFmpegAudioDecoder();
+                        audioDecoder = new com.x4yi.x4ui.impl.client.media.backend.ffmpeg.FFmpegAudioDecoder();
                         audioDecoder.setVolume(audioVolume);
                         audioDecoder.setMuted(audioMuted);
                         audioDecoder.init(localPath);
-                        if (!audioDecoder.isError()) {
-                            mediaPlayer.setAudioDecoder(audioDecoder);
-                        } else {
+                        if (destroyed || loadGeneration.get() != gen) {
+                            audioDecoder.close();
+                            decoder.close();
+                            return;
+                        }
+                        if (audioDecoder.isError()) {
                             LOGGER.warn("[X4UI Video] Audio decoder disabled for '{}': {}", videoUrl, audioDecoder.getErrorMessage());
+                            audioDecoder.close();
+                            audioDecoder = null;
                         }
                     } catch (Exception audioEx) {
                         LOGGER.warn("[X4UI Video] Audio init failed for '{}' (continuing muted): {}", videoUrl, audioEx.getMessage());
+                        if (audioDecoder != null) {
+                            audioDecoder.close();
+                            audioDecoder = null;
+                        }
                     }
                 }
-                net.minecraft.client.Minecraft.getMinecraft().addScheduledTask(() -> {
-                    int w = decoder.getVideoWidth();
-                    int h = decoder.getVideoHeight();
-                    if (w > 0 && h > 0) {
-                        if (glTextureId != -1) {
-                            GlStateManager.deleteTexture(glTextureId);
+                if (destroyed || loadGeneration.get() != gen) {
+                    if (audioDecoder != null) audioDecoder.close();
+                    decoder.close();
+                    return;
+                }
+                mediaPlayer.setVideoDecoder(decoder);
+                if (audioDecoder != null) {
+                    mediaPlayer.setAudioDecoder(audioDecoder);
+                }
+                final IVideoDecoder readyDecoder = decoder;
+                if (mc != null) {
+                    mc.addScheduledTask(() -> {
+                        if (destroyed || loadGeneration.get() != gen) {
+                            mediaPlayer.stop();
+                            return;
                         }
-                        glTextureId = GLGraphics.INSTANCE.createBgraTexture(w, h);
-                        hasUploadedFirstFrame = false;
-                    }
-                });
+                        int w = readyDecoder.getVideoWidth();
+                        int h = readyDecoder.getVideoHeight();
+                        if (w > 0 && h > 0) {
+                            if (glTextureId != -1) {
+                                GlStateManager.deleteTexture(glTextureId);
+                            }
+                            glTextureId = GLGraphics.INSTANCE.createBgraTexture(w, h);
+                            hasUploadedFirstFrame = false;
+                        }
+                    });
+                }
             } catch (Exception e) {
-                reportVideoError(e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName(), e);
+                if (audioDecoder != null) audioDecoder.close();
+                if (decoder != null) decoder.close();
+                if (!destroyed && loadGeneration.get() == gen) {
+                    reportVideoError(e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName(), e);
+                }
             }
         });
     }
@@ -285,8 +344,8 @@ public class GuiVideo extends GuiComponent {
                     hasUploadedFirstFrame = true;
                     lastUploadedPts = frame.pts;
                 }
-                if (decoder instanceof JCodecVideoDecoder) {
-                    ((JCodecVideoDecoder) decoder).popFrame();
+                if (decoder instanceof com.x4yi.x4ui.impl.client.media.backend.jcodec.JCodecVideoDecoder) {
+                    ((com.x4yi.x4ui.impl.client.media.backend.jcodec.JCodecVideoDecoder) decoder).popFrame();
                 }
             }
         }

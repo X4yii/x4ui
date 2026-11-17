@@ -1,283 +1,238 @@
 package com.x4yi.x4ui.client.gui.utils;
+
+import com.x4yi.x4ui.client.gui.ScreenRegistry;
+import com.x4yi.x4ui.client.gui.base.GuiBaseScreen;
 import com.x4yi.x4ui.client.gui.component.GuiButton;
-import com.x4yi.x4ui.client.gui.component.GuiComponent;
-import com.x4yi.x4ui.client.gui.component.GuiImage;
 import com.x4yi.x4ui.client.gui.component.GuiLabel;
 import com.x4yi.x4ui.client.gui.component.GuiPanel;
-import com.x4yi.x4ui.client.gui.component.GuiScrollPanel;
-import com.x4yi.x4ui.client.gui.component.GuiMarkdown;
-import com.x4yi.x4ui.client.gui.component.GuiModelRender;
-import com.x4yi.x4ui.client.gui.component.GuiSlot;
-import com.x4yi.x4ui.client.gui.component.GuiSprite;
-import com.x4yi.x4ui.client.gui.component.GuiTextInput;
-import com.x4yi.x4ui.client.gui.component.GuiToggle;
-import com.x4yi.x4ui.client.gui.component.GuiDropdown;
-import com.x4yi.x4ui.client.gui.component.image.NineSliceConfig;
-import com.x4yi.x4ui.client.gui.component.slider.GuiSliderInt;
-import com.x4yi.x4ui.client.gui.component.slider.GuiSliderFloat;
-import com.x4yi.x4ui.client.gui.component.slider.GuiSliderDouble;
-import com.x4yi.x4ui.client.gui.component.sprite.ISpriteSource;
-import com.x4yi.x4ui.client.gui.component.sprite.LoopMode;
-import com.x4yi.x4ui.client.gui.component.sprite.SpriteSheetSource;
-import com.x4yi.x4ui.client.gui.component.sprite.SequenceSource;
-import com.x4yi.x4ui.client.gui.component.layout.FlexDirection;
-import com.x4yi.x4ui.client.gui.base.GuiBaseContainer;
-import com.x4yi.x4ui.common.State;
-import net.minecraft.entity.EntityLivingBase;
-import net.minecraft.item.ItemStack;
-import net.minecraft.inventory.Slot;
-import net.minecraft.util.ResourceLocation;
-public class GuiBuilder<T extends GuiComponent> {
-    private final T component;
-    private GuiBuilder(T component) {
-        this.component = component;
+import com.x4yi.x4ui.client.gui.input.KeyCodes;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.GuiScreen;
+import net.minecraft.nbt.NBTTagCompound;
+
+import java.io.IOException;
+import java.util.function.BiConsumer;
+import java.util.function.Consumer;
+import java.util.function.Function;
+
+/**
+ * Official X4UI screen entry point and builder API.
+ * Allows consumer mods to build, register, open, and close X4UI screens without
+ * importing Minecraft's {@link GuiScreen} or {@link Minecraft#displayGuiScreen}.
+ */
+public final class GuiBuilder {
+    private GuiBuilder() {}
+
+    public static ScreenBuilder screen(String title) {
+        return new ScreenBuilder(title);
     }
-    public static GuiBuilder<GuiPanel> createPanel() {
-        return new GuiBuilder<>(new GuiPanel(0, 0, 100, 100));
+
+    public static void register(String screenId, Function<NBTTagCompound, GuiBaseScreen> factory) {
+        if (screenId == null || factory == null) return;
+        ScreenRegistry.register(screenId, factory::apply);
     }
-    public static GuiBuilder<GuiScrollPanel> createScrollPanel() {
-        return new GuiBuilder<>(new GuiScrollPanel(0, 0, 100, 100));
+
+    public static GuiBaseScreen modal(String title, int maxWidth, int maxHeight, Consumer<GuiPanel> bodyBuilder) {
+        GuiBaseScreen screen = screen(title)
+                .window(maxWidth, maxHeight)
+                .onInit((s, root) -> {
+                    int textColor = root.getTheme() != null ? root.getTheme().getTextColor() : 0xFFFFFFFF;
+                    GuiPanel header = GuiPanel.row(8);
+                    header.add(GuiLabel.of(title != null ? title : "", textColor));
+                    header.add(GuiPanel.spacer());
+                    header.add(new GuiButton(0, 0, 20, 20, "X", s::closeScreen));
+                    root.addChild(header);
+                    if (bodyBuilder != null) {
+                        bodyBuilder.accept(root);
+                    }
+                })
+                .build();
+        open(screen);
+        return screen;
     }
-    public static GuiBuilder<GuiButton> createButton(String text) {
-        return new GuiBuilder<>(new GuiButton(0, 0, 100, 20, text, null));
-    }
-    public static GuiBuilder<GuiLabel> createLabel(String text) {
-        return new GuiBuilder<>(new GuiLabel(0, 0, text, 0xFFFFFFFF));
-    }
-    public static GuiBuilder<GuiLabel> createLabel(String text, int color) {
-        return new GuiBuilder<>(new GuiLabel(0, 0, text, color));
-    }
-    public static GuiBuilder<GuiMarkdown> createMarkdown(String text) {
-        return new GuiBuilder<>(new GuiMarkdown(0, 0, 0, text));
-    }
-    public static GuiBuilder<GuiModelRender> createModelRender() {
-        return new GuiBuilder<>(new GuiModelRender(0, 0, 0, 0));
-    }
-    public static GuiBuilder<GuiSlot> createSlot(Slot slot, GuiBaseContainer container) {
-        return new GuiBuilder<>(new GuiSlot(slot, container));
-    }
-    public static GuiBuilder<GuiImage> createImage() {
-        return new GuiBuilder<>(new GuiImage(0, 0, 100, 100));
-    }
-    public static GuiBuilder<GuiImage> createImage(ResourceLocation texture) {
-        return new GuiBuilder<>(new GuiImage(0, 0, 100, 100, texture));
-    }
-    public static GuiBuilder<GuiImage> createImage(String url) {
-        return new GuiBuilder<>(new GuiImage(0, 0, 100, 100, url));
-    }
-    public static GuiBuilder<GuiSprite> createSprite(ISpriteSource source) {
-        return new GuiBuilder<>(new GuiSprite(0, 0, 0, 0, source));
-    }
-    public static GuiBuilder<GuiSprite> createSpriteSheet(ResourceLocation texture, int texWidth, int texHeight, int frameWidth, int frameHeight) {
-        return new GuiBuilder<>(GuiSprite.fromSheet(0, 0, frameWidth, frameHeight, texture, texWidth, texHeight, frameWidth, frameHeight));
-    }
-    public static GuiBuilder<GuiSprite> createSpriteSheet(ResourceLocation texture, int texWidth, int texHeight, int frameWidth, int frameHeight, int totalFrames) {
-        return new GuiBuilder<>(GuiSprite.fromSheet(0, 0, frameWidth, frameHeight, texture, texWidth, texHeight, frameWidth, frameHeight, totalFrames));
-    }
-    public static GuiBuilder<GuiSprite> createSpriteSequence(ResourceLocation[] frames, int frameWidth, int frameHeight) {
-        return new GuiBuilder<>(GuiSprite.fromSequence(0, 0, frameWidth, frameHeight, frames, frameWidth, frameHeight));
-    }
-    public static GuiBuilder<GuiSprite> createSprite(ResourceLocation texture, int textureWidth, int textureHeight) {
-        return new GuiBuilder<>(GuiSprite.fromSheet(0, 0, 0, 0, texture, textureWidth, textureHeight, textureWidth, textureHeight));
-    }
-    public static GuiBuilder<GuiSliderInt> createSliderInt(State<Integer> state, int min, int max, int step) {
-        return new GuiBuilder<>(new GuiSliderInt(0, 0, 100, 10, state, min, max, step));
-    }
-    public static GuiBuilder<GuiSliderFloat> createSliderFloat(State<Float> state, float min, float max, float step) {
-        return new GuiBuilder<>(new GuiSliderFloat(0, 0, 100, 10, state, min, max, step));
-    }
-    public static GuiBuilder<GuiSliderDouble> createSliderDouble(State<Double> state, double min, double max, double step) {
-        return new GuiBuilder<>(new GuiSliderDouble(0, 0, 100, 10, state, min, max, step));
-    }
-    public static GuiBuilder<GuiTextInput> createTextInput() {
-        return new GuiBuilder<>(new GuiTextInput(0, 0, 100, 20));
-    }
-    public static <E> GuiBuilder<GuiDropdown<E>> createDropdown(State<E> state, java.util.List<E> options) {
-        return new GuiBuilder<>(new GuiDropdown<>(0, 0, 100, 20, state, options));
-    }
-    public static GuiBuilder<GuiToggle> createToggle(String label, boolean defaultState, java.util.function.Consumer<Boolean> onStateChanged) {
-        return new GuiBuilder<>(new GuiToggle(0, 0, 100, 20, label, defaultState, onStateChanged));
-    }
-    public static GuiBuilder<GuiToggle> createToggle(String label, State<Boolean> state) {
-        return new GuiBuilder<>(new GuiToggle(0, 0, 100, 20, label, state));
-    }
-    public GuiBuilder<T> position(int x, int y) {
-        component.setX(x);
-        component.setY(y);
-        return this;
-    }
-    public GuiBuilder<T> size(int width, int height) {
-        component.setWidth(width);
-        component.setHeight(height);
-        return this;
-    }
-    public GuiBuilder<T> margin(com.x4yi.x4ui.client.gui.utils.Insets margin) {
-        component.setMargin(margin);
-        return this;
-    }
-    public GuiBuilder<T> padding(com.x4yi.x4ui.client.gui.utils.Insets padding) {
-        component.setPadding(padding);
-        return this;
-    }
-    public GuiBuilder<T> visible(boolean visible) {
-        component.setVisible(visible);
-        return this;
-    }
-    public GuiBuilder<T> enabled(boolean enabled) {
-        component.setEnabled(enabled);
-        return this;
-    }
-    public GuiBuilder<T> layer(int layer) {
-        component.setLayer(layer);
-        return this;
-    }
-    public GuiBuilder<T> flexDirection(FlexDirection direction) {
-        if (component instanceof GuiPanel) {
-            ((GuiPanel) component).setFlexDirection(direction);
+
+    public static void open(GuiBaseScreen screen) {
+        if (screen == null) return;
+        Minecraft mc = Minecraft.getMinecraft();
+        if (mc != null) {
+            mc.displayGuiScreen(screen);
         }
-        return this;
     }
-    public GuiBuilder<T> gap(int gap) {
-        if (component instanceof GuiPanel) {
-            ((GuiPanel) component).setGap(gap);
+
+    public static void close() {
+        Minecraft mc = Minecraft.getMinecraft();
+        if (mc != null) {
+            if (mc.currentScreen instanceof GuiBaseScreen) {
+                ((GuiBaseScreen) mc.currentScreen).closeScreen();
+            } else {
+                mc.displayGuiScreen(null);
+            }
         }
-        return this;
     }
-    public GuiBuilder<T> flexWrap(boolean flexWrap) {
-        if (component instanceof GuiPanel) {
-            ((GuiPanel) component).setFlexWrap(flexWrap);
+
+    public static final class ScreenBuilder {
+        private final String title;
+        private GuiScreen parentScreen;
+        private boolean hasExplicitParent = false;
+        private int windowMaxWidth = 0;
+        private int windowMaxHeight = 0;
+        private boolean dimBackground = true;
+        private Integer dimColor = null;
+        private boolean animateOpen = false;
+        private boolean escCloses = true;
+        private boolean pauseGame = false;
+        private String channelId = null;
+        private ITheme theme;
+        private BiConsumer<GuiBaseScreen, GuiPanel> onInit;
+        private BiConsumer<Integer, Integer> onResize;
+        private Runnable onClose;
+
+        private ScreenBuilder(String title) {
+            this.title = title != null ? title : "";
         }
-        return this;
-    }
-    public GuiBuilder<T> onClick(Runnable action) {
-        if (component instanceof GuiButton) {
-            ((GuiButton) component).setOnClick(action);
+
+        public ScreenBuilder parent(GuiScreen parentScreen) {
+            this.parentScreen = parentScreen;
+            this.hasExplicitParent = true;
+            return this;
         }
-        return this;
-    }
-    public GuiBuilder<T> onLinkClicked(java.util.function.Consumer<String> consumer) {
-        if (component instanceof GuiMarkdown) {
-            ((GuiMarkdown) component).onLinkClicked = consumer;
+
+        public ScreenBuilder window(int maxWidth, int maxHeight) {
+            this.windowMaxWidth = maxWidth;
+            this.windowMaxHeight = maxHeight;
+            return this;
         }
-        return this;
-    }
-    public GuiBuilder<T> entity(EntityLivingBase entity) {
-        if (component instanceof GuiModelRender) {
-            ((GuiModelRender) component).setEntity(entity);
+
+        public ScreenBuilder dimBackground(boolean dimBackground) {
+            this.dimBackground = dimBackground;
+            return this;
         }
-        return this;
-    }
-    public GuiBuilder<T> itemStack(ItemStack stack) {
-        if (component instanceof GuiModelRender) {
-            ((GuiModelRender) component).setItemStack(stack);
+
+        public ScreenBuilder dimColor(int argb) {
+            this.dimColor = argb;
+            return this;
         }
-        return this;
-    }
-    public GuiBuilder<T> modelScale(float scale) {
-        if (component instanceof GuiModelRender) {
-            ((GuiModelRender) component).setScale(scale);
+
+        public ScreenBuilder animateOpen(boolean animateOpen) {
+            this.animateOpen = animateOpen;
+            return this;
         }
-        return this;
-    }
-    public GuiBuilder<T> modelRotation(float yaw, float pitch, float roll) {
-        if (component instanceof GuiModelRender) {
-            ((GuiModelRender) component).setRotation(yaw, pitch, roll);
+
+        public ScreenBuilder escCloses(boolean escCloses) {
+            this.escCloses = escCloses;
+            return this;
         }
-        return this;
-    }
-    public GuiBuilder<T> modelTranslation(float x, float y, float z) {
-        if (component instanceof GuiModelRender) {
-            ((GuiModelRender) component).setTranslation(x, y, z);
+
+        public ScreenBuilder pauseGame(boolean pauseGame) {
+            this.pauseGame = pauseGame;
+            return this;
         }
-        return this;
-    }
-    public GuiBuilder<T> modelDragRotation(boolean allow) {
-        if (component instanceof GuiModelRender) {
-            ((GuiModelRender) component).setAllowDragRotation(allow);
+
+        public ScreenBuilder bindChannel(String channelId) {
+            this.channelId = channelId;
+            return this;
         }
-        return this;
-    }
-    public GuiBuilder<T> modelLookAtCursor(boolean lookAtCursor) {
-        if (component instanceof GuiModelRender) {
-            ((GuiModelRender) component).setLookAtCursor(lookAtCursor);
+
+        public ScreenBuilder theme(ITheme theme) {
+            this.theme = theme;
+            return this;
         }
-        return this;
-    }
-    public GuiBuilder<T> placeholder(String placeholder) {
-        if (component instanceof GuiTextInput) {
-            ((GuiTextInput) component).setPlaceholder(placeholder);
+
+        public ScreenBuilder onInit(BiConsumer<GuiBaseScreen, GuiPanel> onInit) {
+            this.onInit = onInit;
+            return this;
         }
-        return this;
-    }
-    public GuiBuilder<T> tooltip(String text) {
-        component.setTooltip(text);
-        return this;
-    }
-    public GuiBuilder<T> tooltip(GuiComponent tooltipComponent) {
-        component.setTooltipComponent(tooltipComponent);
-        return this;
-    }
-    public GuiBuilder<T> bindVisible(State<Boolean> state) {
-        component.bindState(state, component::setVisible);
-        return this;
-    }
-    public GuiBuilder<T> bindEnabled(State<Boolean> state) {
-        component.bindState(state, component::setEnabled);
-        return this;
-    }
-    public GuiBuilder<T> bindLabelText(State<String> state) {
-        if (component instanceof GuiLabel) {
-            component.bindState(state, ((GuiLabel) component)::setText);
+
+        public ScreenBuilder onResize(BiConsumer<Integer, Integer> onResize) {
+            this.onResize = onResize;
+            return this;
         }
-        return this;
-    }
-    public GuiBuilder<T> sliceSize(int size) {
-        if (component instanceof GuiImage) {
-            ((GuiImage) component).withNineSlice(size, 256, 256);
+
+        public ScreenBuilder onClose(Runnable onClose) {
+            this.onClose = onClose;
+            return this;
         }
-        return this;
-    }
-    public GuiBuilder<T> nineSlice(NineSliceConfig config) {
-        if (component instanceof GuiImage) {
-            ((GuiImage) component).withNineSlice(config);
+
+        public GuiBaseScreen build() {
+            GuiScreen resolvedParent = parentScreen;
+            if (!hasExplicitParent) {
+                Minecraft mc = Minecraft.getMinecraft();
+                if (mc != null) {
+                    resolvedParent = mc.currentScreen;
+                }
+            }
+            final int wMax = windowMaxWidth;
+            final int hMax = windowMaxHeight;
+            final boolean dim = dimBackground;
+            final Integer customDimColor = dimColor;
+            final boolean anim = animateOpen;
+            final boolean allowEsc = escCloses;
+            final boolean pauses = pauseGame;
+            final String ch = channelId;
+            final ITheme customTheme = theme;
+            final BiConsumer<GuiBaseScreen, GuiPanel> initCb = onInit;
+            final BiConsumer<Integer, Integer> resizeCb = onResize;
+            final Runnable closeCb = onClose;
+
+            GuiBaseScreen screen = new GuiBaseScreen(resolvedParent, title) {
+                @Override
+                protected void initComponents() {
+                    if (customTheme != null) {
+                        setTheme(customTheme);
+                    }
+                    if (ch != null && !ch.isEmpty()) {
+                        bindChannel(ch);
+                    }
+                    GuiPanel container = wMax > 0 ? createCenteredWindow(wMax, hMax) : getRootPanel();
+                    if (initCb != null) {
+                        initCb.accept(this, container);
+                    }
+                }
+
+                @Override
+                protected void onScreenResize(int newWidth, int newHeight) {
+                    super.onScreenResize(newWidth, newHeight);
+                    if (resizeCb != null) {
+                        resizeCb.accept(newWidth, newHeight);
+                    }
+                }
+
+                @Override
+                protected void keyTyped(char typedChar, int keyCode) throws IOException {
+                    if (!allowEsc && keyCode == KeyCodes.ESCAPE) {
+                        if (getRootPanel() != null) {
+                            getRootPanel().onKeyPress(typedChar, keyCode);
+                        }
+                        return;
+                    }
+                    super.keyTyped(typedChar, keyCode);
+                }
+
+                @Override
+                public boolean doesGuiPauseGame() {
+                    return pauses;
+                }
+
+                @Override
+                public void onGuiClosed() {
+                    super.onGuiClosed();
+                    if (closeCb != null) {
+                        closeCb.run();
+                    }
+                }
+            };
+            screen.setDimBackground(dim);
+            if (customDimColor != null) {
+                screen.setDimColor(customDimColor);
+            }
+            screen.setAnimateOpen(anim);
+            return screen;
         }
-        return this;
-    }
-    public GuiBuilder<T> nineSlice(int sliceSize, int textureWidth, int textureHeight) {
-        if (component instanceof GuiImage) {
-            ((GuiImage) component).withNineSlice(sliceSize, textureWidth, textureHeight);
+
+        public GuiBaseScreen open() {
+            GuiBaseScreen screen = build();
+            GuiBuilder.open(screen);
+            return screen;
         }
-        return this;
-    }
-    public GuiBuilder<T> fps(float fps) {
-        if (component instanceof GuiSprite) {
-            ((GuiSprite) component).setFPS(fps);
-        }
-        return this;
-    }
-    public GuiBuilder<T> loopMode(LoopMode mode) {
-        if (component instanceof GuiSprite) {
-            ((GuiSprite) component).setLoopMode(mode);
-        }
-        return this;
-    }
-    public GuiBuilder<T> flipX(boolean flip) {
-        if (component instanceof GuiSprite) {
-            ((GuiSprite) component).setFlipX(flip);
-        }
-        return this;
-    }
-    public GuiBuilder<T> flipY(boolean flip) {
-        if (component instanceof GuiSprite) {
-            ((GuiSprite) component).setFlipY(flip);
-        }
-        return this;
-    }
-    public GuiBuilder<T> withChild(GuiComponent child) {
-        component.addChild(child);
-        return this;
-    }
-    public T build() {
-        return component;
     }
 }

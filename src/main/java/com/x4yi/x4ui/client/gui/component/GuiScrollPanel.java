@@ -38,6 +38,7 @@ public class GuiScrollPanel extends GuiPanel {
             @Override
             public boolean onMouseClick(int mouseX, int mouseY, int mouseButton) {
                 if (!visible || !enabled || !GuiScrollPanel.this.isMouseOver(mouseX, mouseY)) return false;
+                ensureRenderChildren();
                 int viewHeight = GuiScrollPanel.this.height;
                 int scrollViewY = (int) scrollY;
                 for (int i = renderChildren.size() - 1; i >= 0; i--) {
@@ -51,6 +52,11 @@ public class GuiScrollPanel extends GuiPanel {
                     }
                 }
                 return false;
+            }
+            @Override
+            public GuiComponent getHoveredComponent(int mouseX, int mouseY) {
+                if (!visible || !GuiScrollPanel.this.isMouseOver(mouseX, mouseY)) return null;
+                return super.getHoveredComponent(mouseX, mouseY);
             }
         };
         contentPanel.setFlexDirection(FlexDirection.VERTICAL);
