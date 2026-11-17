@@ -1,15 +1,19 @@
 package com.x4yi.x4ui.common.network;
 
-import net.minecraft.client.Minecraft;
+import com.x4yi.x4ui.X4UI;
+import io.netty.buffer.ByteBuf;
 import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.nbt.NBTTagCompound;
+import net.minecraftforge.fml.common.network.ByteBufUtils;
 import net.minecraftforge.fml.common.network.NetworkRegistry;
 import net.minecraftforge.fml.common.network.simpleimpl.SimpleNetworkWrapper;
 import net.minecraftforge.fml.relauncher.Side;
-import net.minecraftforge.fml.relauncher.SideOnly;
 
 import javax.annotation.Nullable;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -134,6 +138,33 @@ public final class UINetwork {
         }
     }
 
+    public static void unregisterActionHandler(String actionId) {
+        if (actionId != null) {
+            ACTION_HANDLERS.remove(actionId);
+        }
+    }
+
+    public static void unregisterRpc(String rpcId) {
+        if (rpcId != null) {
+            RPC_HANDLERS.remove(rpcId);
+        }
+    }
+
+    public static String readBoundedUtf8(ByteBuf buf, int maxChars) {
+        int byteLen = ByteBufUtils.readVarInt(buf, 2);
+        if (byteLen < 0) return "";
+        int maxBytes = Math.max(1, maxChars) * 4;
+        if (byteLen > maxBytes || byteLen > buf.readableBytes()) {
+            int skip = Math.min(byteLen, buf.readableBytes());
+            if (skip > 0) buf.skipBytes(skip);
+            return "";
+        }
+        byte[] bytes = new byte[byteLen];
+        buf.readBytes(bytes);
+        String s = new String(bytes, StandardCharsets.UTF_8);
+        return s.length() > maxChars ? s.substring(0, maxChars) : s;
+    }
+
     public static boolean checkRateLimit(EntityPlayerMP player, String actionOrRpcId) {
         if (player == null || actionOrRpcId == null) return false;
         if (ACTION_UNSUBSCRIBE_CHANNEL.equals(actionOrRpcId)) return true;
@@ -155,13 +186,22 @@ public final class UINetwork {
         RATE_LIMITS.keySet().removeIf(k -> k.startsWith(prefix));
     }
 
+    public static void clearAllRateLimits() {
+        RATE_LIMITS.clear();
+    }
+
     public static void dispatchActionOnServer(EntityPlayerMP player, String actionId, @Nullable NBTTagCompound data) {
         if (player == null || actionId == null || actionId.isEmpty()) return;
+        ActionEntry entry = ACTION_HANDLERS.get(actionId);
+        boolean containerHandles = player.openContainer instanceof IServerActionHandler;
+        if (entry == null && !containerHandles) {
+            checkRateLimit(player, "__unknown__");
+            return;
+        }
         if (!checkRateLimit(player, actionId)) return;
-        if (player.openContainer instanceof IServerActionHandler) {
+        if (containerHandles) {
             ((IServerActionHandler) player.openContainer).onAction(player, actionId, data);
         }
-        ActionEntry entry = ACTION_HANDLERS.get(actionId);
         if (entry != null) {
             if (entry.guard == null || entry.guard.allow(player, data)) {
                 entry.handler.onAction(player, actionId, data);
@@ -173,12 +213,15 @@ public final class UINetwork {
         if (player == null || rpcId == null || rpcId.isEmpty()) {
             return RpcResult.error("INVALID_REQUEST", "Missing player or rpcId");
         }
-        if (!checkRateLimit(player, rpcId)) {
-            return RpcResult.error("RATE_LIMITED", "Too many requests");
-        }
         RpcEntry entry = RPC_HANDLERS.get(rpcId);
         if (entry == null) {
+            if (!checkRateLimit(player, "__unknown_rpc__")) {
+                return RpcResult.error("RATE_LIMITED", "Too many requests");
+            }
             return RpcResult.error("UNKNOWN_RPC", "No RPC handler registered for: " + rpcId);
+        }
+        if (!checkRateLimit(player, rpcId)) {
+            return RpcResult.error("RATE_LIMITED", "Too many requests");
         }
         if (entry.guard != null && !entry.guard.allow(player, params)) {
             return RpcResult.error("FORBIDDEN", "ActionGuard rejected request");
@@ -187,7 +230,10 @@ public final class UINetwork {
             RpcResult result = entry.handler.handle(player, params != null ? params : new NBTTagCompound());
             return result != null ? result : RpcResult.ok();
         } catch (Exception e) {
-            return RpcResult.error("INTERNAL_ERROR", e.getMessage() != null ? e.getMessage() : "Server error");
+            if (X4UI.getLogger() != null) {
+                X4UI.getLogger().error("RPC '{}' failed on server", rpcId, e);
+            }
+            return RpcResult.error("INTERNAL_ERROR", "Internal server error");
         }
     }
 
@@ -232,7 +278,18 @@ public final class UINetwork {
     }
 
     public static void cancelAllPendingRpcs() {
-        PENDING_RPCS.clear();
+        if (PENDING_RPCS.isEmpty()) return;
+        List<PendingRpc> cancelled = new ArrayList<>();
+        Iterator<Map.Entry<Long, PendingRpc>> it = PENDING_RPCS.entrySet().iterator();
+        while (it.hasNext()) {
+            Map.Entry<Long, PendingRpc> entry = it.next();
+            cancelled.add(entry.getValue());
+            it.remove();
+        }
+        RpcResult err = RpcResult.error("DISCONNECTED", "Disconnected from server");
+        for (PendingRpc pending : cancelled) {
+            pending.callback.accept(err);
+        }
     }
 
     public static void sweepExpiredRpcs() {
@@ -248,14 +305,9 @@ public final class UINetwork {
         }
     }
 
-    @SideOnly(Side.CLIENT)
-    static void completeRpcOnClient(long requestId, RpcResult result) {
+    public static void deliverRpcResult(long requestId, RpcResult result) {
         PendingRpc pending = PENDING_RPCS.remove(requestId);
-        if (pending == null) return;
-        Minecraft mc = Minecraft.getMinecraft();
-        if (mc != null) {
-            mc.addScheduledTask(() -> pending.callback.accept(result));
-        } else {
+        if (pending != null) {
             pending.callback.accept(result);
         }
     }

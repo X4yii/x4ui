@@ -1,7 +1,7 @@
 package com.x4yi.x4ui.proxy;
 
-import com.x4yi.x4ui.api.client.media.IMediaService;
 import com.x4yi.x4ui.common.network.ClientSessionTracker;
+import com.x4yi.x4ui.common.network.RpcResult;
 import com.x4yi.x4ui.common.network.UINetwork;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraftforge.common.MinecraftForge;
@@ -25,13 +25,12 @@ public class CommonProxy {
     public void loadComplete(FMLLoadCompleteEvent event) {
     }
 
-    public IMediaService getMediaService() {
-        return null;
-    }
-
     public void handleClientStateSync(String key, Object value) {
     }
 
     public void handleClientCommand(byte command, String targetId, NBTTagCompound payload) {
+    }
+
+    public void handleClientRpcResponse(long requestId, RpcResult result) {
     }
 }

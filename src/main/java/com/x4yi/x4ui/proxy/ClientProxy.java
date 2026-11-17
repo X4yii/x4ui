@@ -1,5 +1,4 @@
 package com.x4yi.x4ui.proxy;
-import com.x4yi.x4ui.api.client.media.IMediaService;
 import com.x4yi.x4ui.client.gui.ScreenRegistry;
 import com.x4yi.x4ui.client.gui.animation.GuiAnimator;
 import com.x4yi.x4ui.client.gui.base.GuiBaseContainer;
@@ -11,7 +10,6 @@ import com.x4yi.x4ui.client.gui.component.toast.GuiToastManager;
 import com.x4yi.x4ui.common.network.PacketServerCommand;
 import com.x4yi.x4ui.common.network.UINetwork;
 import com.x4yi.x4ui.impl.client.media.MediaManager;
-import com.x4yi.x4ui.impl.client.media.MediaService;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiScreen;
 import net.minecraft.nbt.NBTTagCompound;
@@ -25,12 +23,10 @@ import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
 @SideOnly(Side.CLIENT)
 public class ClientProxy extends CommonProxy {
-    private IMediaService mediaService;
     @Override
     public void preInit(FMLPreInitializationEvent event) {
         super.preInit(event);
         MediaManager.setBinDir(event.getModConfigurationDirectory().getParentFile());
-        this.mediaService = new MediaService();
         scanModMediaManifests();
         com.x4yi.x4ui.impl.client.media.MediaPipeline.getInstance().enqueuePreloads(
                 com.x4yi.x4ui.api.client.media.MediaRegistry.getAllRegisteredMedia()
@@ -111,14 +107,32 @@ public class ClientProxy extends CommonProxy {
             net.minecraftforge.fml.common.ProgressManager.pop(bar);
         }
     }
-    @Override
-    public IMediaService getMediaService() {
-        return mediaService;
-    }
+    private int rpcSweepCounter = 0;
+
     @SubscribeEvent
     public void onRenderTick(TickEvent.RenderTickEvent event) {
         if (event.phase == TickEvent.Phase.START) {
             GuiAnimator.update();
+        }
+    }
+
+    @SubscribeEvent
+    public void onClientTick(TickEvent.ClientTickEvent event) {
+        if (event.phase == TickEvent.Phase.END) {
+            if (++rpcSweepCounter >= 10) {
+                rpcSweepCounter = 0;
+                UINetwork.sweepExpiredRpcs();
+            }
+        }
+    }
+
+    @Override
+    public void handleClientRpcResponse(long requestId, com.x4yi.x4ui.common.network.RpcResult result) {
+        Minecraft mc = Minecraft.getMinecraft();
+        if (mc != null) {
+            mc.addScheduledTask(() -> UINetwork.deliverRpcResult(requestId, result));
+        } else {
+            UINetwork.deliverRpcResult(requestId, result);
         }
     }
     @Override
