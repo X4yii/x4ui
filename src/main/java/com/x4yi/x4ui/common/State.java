@@ -7,7 +7,7 @@ import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Function;
 public class State<T> {
-    private T value;
+    private volatile T value;
     private final List<Consumer<T>> listeners = new CopyOnWriteArrayList<>();
     public State(T initialValue) {
         this.value = initialValue;
@@ -16,15 +16,21 @@ public class State<T> {
         return value;
     }
     public void set(T newValue) {
-        if (Objects.equals(this.value, newValue)) {
-            return;
+        synchronized (this) {
+            if (Objects.equals(this.value, newValue)) {
+                return;
+            }
+            this.value = newValue;
         }
-        this.value = newValue;
         for (Consumer<T> listener : listeners) {
             if (listener instanceof WeakListener && ((WeakListener<?>) listener).isDead()) {
                 listeners.remove(listener);
             } else {
-                listener.accept(newValue);
+                try {
+                    listener.accept(newValue);
+                } catch (Exception e) {
+                    org.apache.logging.log4j.LogManager.getLogger("x4ui").warn("State listener threw exception", e);
+                }
             }
         }
     }
@@ -42,6 +48,7 @@ public class State<T> {
         return () -> removeListener(listener);
     }
     public void addListener(Consumer<T> listener) {
+        if (listener == null) return;
         this.listeners.add(listener);
     }
     public void removeListener(Consumer<T> listener) {

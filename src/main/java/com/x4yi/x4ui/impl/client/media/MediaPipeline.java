@@ -52,6 +52,23 @@ public class MediaPipeline {
     public File getCacheRoot() {
         return cacheRoot;
     }
+    public void cleanCache(String modId, int daysOld) {
+        try {
+            String safeModId = com.x4yi.x4ui.impl.client.resource.network.SecurityUtils.sanitizeModId(modId);
+            File dir = com.x4yi.x4ui.impl.client.resource.network.SecurityUtils.resolveSafeChild(cacheRoot, safeModId);
+            if (!dir.exists() || !dir.isDirectory()) return;
+            long cutoff = System.currentTimeMillis() - (Math.max(0, daysOld) * 86400000L);
+            File[] files = dir.listFiles();
+            if (files != null) {
+                for (File f : files) {
+                    if (f.isFile() && f.lastModified() < cutoff) {
+                        f.delete();
+                    }
+                }
+            }
+        } catch (Exception ignored) {
+        }
+    }
     public void cleanTemporaryFiles() {
         try {
             File[] modDirs = cacheRoot.listFiles(File::isDirectory);
@@ -91,6 +108,10 @@ public class MediaPipeline {
     public List<PreloadTask> getPendingPreloadTasks() {
         return pendingPreloadTasks;
     }
+    public CompletableFuture<File> obtainMedia(String modId, String urlStr) {
+        return obtainMedia(modId, urlStr, null);
+    }
+
     public CompletableFuture<File> obtainMedia(String modId, String urlStr, MediaProgressListener listener) {
         if (urlStr == null || urlStr.trim().isEmpty()) {
             CompletableFuture<File> failed = new CompletableFuture<>();
@@ -98,16 +119,20 @@ public class MediaPipeline {
             return failed;
         }
         String trimmed = urlStr.trim();
-        boolean isHttp = trimmed.startsWith("http://") || trimmed.startsWith("https://");
+        String lower = trimmed.toLowerCase(java.util.Locale.ROOT);
+        boolean isHttp = lower.startsWith("http://") || lower.startsWith("https://");
         if (!isHttp) {
             File localFile = new File(trimmed);
             try {
-                File mcDir = (Minecraft.getMinecraft() != null && Minecraft.getMinecraft().mcDataDir != null)
-                        ? Minecraft.getMinecraft().mcDataDir.getCanonicalFile()
-                        : new File(".").getCanonicalFile();
+                File allowedRoot = new File(
+                        (Minecraft.getMinecraft() != null && Minecraft.getMinecraft().mcDataDir != null)
+                                ? Minecraft.getMinecraft().mcDataDir
+                                : new File("."),
+                        "x4ui"
+                ).getCanonicalFile();
                 File canonicalLocal = localFile.getCanonicalFile();
                 if (canonicalLocal.exists() && canonicalLocal.length() > 0
-                        && canonicalLocal.getPath().startsWith(mcDir.getPath() + File.separator)) {
+                        && canonicalLocal.getPath().startsWith(allowedRoot.getPath() + File.separator)) {
                     return CompletableFuture.completedFuture(canonicalLocal);
                 }
             } catch (Exception ignored) {
@@ -118,6 +143,7 @@ public class MediaPipeline {
         }
         String hash = com.x4yi.x4ui.impl.client.resource.network.SecurityUtils.sha256Hex(trimmed);
         String safeModId = com.x4yi.x4ui.impl.client.resource.network.SecurityUtils.sanitizeModId(modId);
+        String flightKey = safeModId + ":" + hash;
         File modDir;
         File optFile;
         try {
@@ -135,12 +161,11 @@ public class MediaPipeline {
             if (listener != null) listener.onProgress("Cached", 100);
             return CompletableFuture.completedFuture(optFile);
         }
-        CompletableFuture<File> existing = inFlight.get(hash);
+        CompletableFuture<File> newFuture = new CompletableFuture<>();
+        CompletableFuture<File> existing = inFlight.putIfAbsent(flightKey, newFuture);
         if (existing != null) {
             return existing;
         }
-        CompletableFuture<File> future = new CompletableFuture<>();
-        inFlight.put(hash, future);
         MediaProgressListener wrappedListener = (status, percent) -> {
             if (listener != null) listener.onProgress(status, percent);
         };
@@ -153,24 +178,24 @@ public class MediaPipeline {
                 wrappedListener.onProgress("Optimizing", -1);
                 optimizeVideo(rawTmp, transcodeTmp);
                 if (transcodeTmp.exists() && transcodeTmp.length() > 1024) {
-                    if (optFile.exists()) optFile.delete();
-                    transcodeTmp.renameTo(optFile);
+                    java.nio.file.Files.move(transcodeTmp.toPath(), optFile.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
                     rawTmp.delete();
                 } else if (rawTmp.exists() && rawTmp.length() > 1024) {
-                    if (optFile.exists()) optFile.delete();
-                    rawTmp.renameTo(optFile);
+                    java.nio.file.Files.move(rawTmp.toPath(), optFile.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                } else {
+                    throw new java.io.IOException("Downloaded media file is empty or missing");
                 }
                 wrappedListener.onProgress("Ready", 100);
-                future.complete(optFile);
+                newFuture.complete(optFile);
             } catch (Throwable e) {
                 if (rawTmp.exists()) rawTmp.delete();
                 if (transcodeTmp.exists()) transcodeTmp.delete();
-                future.completeExceptionally(e);
+                newFuture.completeExceptionally(e);
             } finally {
-                inFlight.remove(hash);
+                inFlight.remove(flightKey, newFuture);
             }
         });
-        return future;
+        return newFuture;
     }
     private void downloadTo(String urlStr, File destination, MediaProgressListener listener) throws Exception {
         java.net.HttpURLConnection conn = com.x4yi.x4ui.impl.client.resource.network.SecurityUtils.openValidatedHttpConnection(urlStr);
@@ -215,16 +240,22 @@ public class MediaPipeline {
         try {
             Process probeP = new ProcessBuilder(
                     ffmpeg.getAbsolutePath(),
-                    "-i", source.getAbsolutePath()
+                    "-protocol_whitelist", "file",
+                    "-i", "file:" + source.getCanonicalPath()
             ).redirectErrorStream(true).start();
             String probeOutput = IOUtils.toString(probeP.getInputStream(), "UTF-8");
-            probeP.waitFor();
+            if (!probeP.waitFor(15, java.util.concurrent.TimeUnit.SECONDS)) {
+                probeP.destroyForcibly();
+                org.apache.commons.io.FileUtils.copyFile(source, destination);
+                return;
+            }
             boolean hasAudio = probeOutput.contains("Audio:");
             List<String> cmd = new ArrayList<>();
             cmd.add(ffmpeg.getAbsolutePath());
             cmd.add("-y");
             cmd.add("-loglevel"); cmd.add("quiet");
-            cmd.add("-i"); cmd.add(source.getAbsolutePath());
+            cmd.add("-protocol_whitelist"); cmd.add("file");
+            cmd.add("-i"); cmd.add("file:" + source.getCanonicalPath());
             cmd.add("-vf"); cmd.add("scale='min(1280,iw)':'min(720,ih)':force_original_aspect_ratio=decrease,pad=ceil(iw/2)*2:ceil(ih/2)*2");
             cmd.add("-c:v"); cmd.add("libx264");
             cmd.add("-profile:v"); cmd.add("baseline");
@@ -242,27 +273,21 @@ public class MediaPipeline {
             cmd.add("-movflags"); cmd.add("+faststart");
             cmd.add("-threads"); cmd.add("2");
             cmd.add(destination.getAbsolutePath());
-            Process transcodeP = new ProcessBuilder(cmd).start();
-            transcodeP.waitFor();
+            Process transcodeP = new ProcessBuilder(cmd).redirectErrorStream(true).start();
+            try (InputStream drain = transcodeP.getInputStream()) {
+                byte[] skipBuf = new byte[4096];
+                while (drain.read(skipBuf) != -1) {
+                    // drain output to prevent pipe deadlock
+                }
+            }
+            if (!transcodeP.waitFor(120, java.util.concurrent.TimeUnit.SECONDS)) {
+                transcodeP.destroyForcibly();
+                org.apache.commons.io.FileUtils.copyFile(source, destination);
+            }
         } catch (Exception e) {
             try {
                 org.apache.commons.io.FileUtils.copyFile(source, destination);
             } catch (Exception ignored) {}
-        }
-    }
-    private static String getSHA256(String input) {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] hash = digest.digest(input.getBytes("UTF-8"));
-            StringBuilder hexString = new StringBuilder();
-            for (byte b : hash) {
-                String hex = Integer.toHexString(0xff & b);
-                if (hex.length() == 1) hexString.append('0');
-                hexString.append(hex);
-            }
-            return hexString.toString();
-        } catch (Exception e) {
-            return String.valueOf(input.hashCode());
         }
     }
 }

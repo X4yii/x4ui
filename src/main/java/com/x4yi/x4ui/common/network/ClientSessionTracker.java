@@ -35,15 +35,17 @@ public final class ClientSessionTracker {
         }
     }
 
+    public static void clearAll() {
+        INSTANCE.clientVersions.clear();
+    }
+
     @SubscribeEvent
     public void onPlayerLoggedOut(PlayerEvent.PlayerLoggedOutEvent event) {
         if (event.player != null) {
             UUID id = event.player.getUniqueID();
             clientVersions.remove(id);
             UINetwork.clearRateLimits(id);
-            if (event.player instanceof EntityPlayerMP) {
-                UIChannels.unsubscribeAll((EntityPlayerMP) event.player);
-            }
+            UIChannels.unsubscribeAll(id);
         }
     }
 }

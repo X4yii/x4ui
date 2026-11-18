@@ -16,14 +16,23 @@ public class StateContainerListener implements IContainerListener {
         propertyListeners.computeIfAbsent(id, k -> new java.util.ArrayList<>()).add(val -> state.set(val != 0));
     }
     public void bindFloatProperty(int id, State<Float> state, float scale) {
+        if (scale == 0.0f || !Float.isFinite(scale)) {
+            throw new IllegalArgumentException("Scale must be finite and non-zero");
+        }
         propertyListeners.computeIfAbsent(id, k -> new java.util.ArrayList<>()).add(val -> state.set(val / scale));
     }
     public void bind32BitProperty(int lowId, int highId, State<Integer> state) {
+        if (lowId == highId) {
+            throw new IllegalArgumentException("lowId and highId must be distinct");
+        }
         Property32Binding binding = new Property32Binding(lowId, highId, state::set);
         propertyListeners.computeIfAbsent(lowId, k -> new java.util.ArrayList<>()).add(binding::updateLow);
         propertyListeners.computeIfAbsent(highId, k -> new java.util.ArrayList<>()).add(binding::updateHigh);
     }
     public void bindFloat32Property(int lowId, int highId, State<Float> state) {
+        if (lowId == highId) {
+            throw new IllegalArgumentException("lowId and highId must be distinct");
+        }
         Property32Binding binding = new Property32Binding(lowId, highId, bits -> state.set(Float.intBitsToFloat(bits)));
         propertyListeners.computeIfAbsent(lowId, k -> new java.util.ArrayList<>()).add(binding::updateLow);
         propertyListeners.computeIfAbsent(highId, k -> new java.util.ArrayList<>()).add(binding::updateHigh);
@@ -53,8 +62,6 @@ public class StateContainerListener implements IContainerListener {
         }
         private void tryEmit() {
             if (hasLow && hasHigh) {
-                hasLow = false;
-                hasHigh = false;
                 consumer.accept((currentHigh << 16) | currentLow);
             }
         }

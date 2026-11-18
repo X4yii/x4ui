@@ -30,15 +30,32 @@ public interface ActionGuard {
     }
 
     static ActionGuard withinDistance(BlockPos pos, double maxDistance) {
+        if (pos == null || maxDistance < 0.0 || !Double.isFinite(maxDistance)) {
+            return (player, data) -> false;
+        }
         final double maxSq = maxDistance * maxDistance;
         return (player, data) -> player != null
-                && pos != null
                 && player.world != null
                 && player.world.isBlockLoaded(pos)
                 && player.getDistanceSqToCenter(pos) <= maxSq;
     }
 
+    static ActionGuard withinDistance(int dimensionId, BlockPos pos, double maxDistance) {
+        if (pos == null || maxDistance < 0.0 || !Double.isFinite(maxDistance)) {
+            return (player, data) -> false;
+        }
+        final double maxSq = maxDistance * maxDistance;
+        return (player, data) -> player != null
+                && player.world != null
+                && player.dimension == dimensionId
+                && player.world.isBlockLoaded(pos)
+                && player.getDistanceSqToCenter(pos) <= maxSq;
+    }
+
     static ActionGuard withinEntityDistance(int entityId, double maxDistance) {
+        if (maxDistance < 0.0 || !Double.isFinite(maxDistance)) {
+            return (player, data) -> false;
+        }
         final double maxSq = maxDistance * maxDistance;
         return (player, data) -> {
             if (player == null || player.world == null) return false;

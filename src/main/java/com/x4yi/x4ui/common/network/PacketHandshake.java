@@ -20,7 +20,7 @@ public class PacketHandshake implements IMessage {
 
     @Override
     public void fromBytes(ByteBuf buf) {
-        this.version = ByteBufUtils.readUTF8String(buf);
+        this.version = UINetwork.readBoundedUtf8(buf, 64);
     }
 
     @Override
@@ -36,10 +36,12 @@ public class PacketHandshake implements IMessage {
                 return new PacketHandshake(X4UI.VERSION);
             } else {
                 EntityPlayerMP player = ctx.getServerHandler().player;
-                if (player != null) {
-                    player.getServerWorld().addScheduledTask(() ->
-                            ClientSessionTracker.INSTANCE.markClientSupported(player.getUniqueID(), message.version)
-                    );
+                if (player != null && player.world != null) {
+                    player.getServerWorld().addScheduledTask(() -> {
+                        if (!player.hasDisconnected()) {
+                            ClientSessionTracker.INSTANCE.markClientSupported(player.getUniqueID(), message.version);
+                        }
+                    });
                 }
                 return null;
             }

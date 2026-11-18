@@ -15,10 +15,14 @@ import org.jcodec.containers.mp4.boxes.Box;
 import org.jcodec.containers.mp4.boxes.SampleEntry;
 import org.jcodec.containers.mp4.demuxer.AbstractMP4DemuxerTrack;
 import org.jcodec.containers.mp4.demuxer.MP4Demuxer;
+import net.minecraftforge.fml.relauncher.Side;
+import net.minecraftforge.fml.relauncher.SideOnly;
 import java.io.File;
 import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
+
+@SideOnly(Side.CLIENT)
 public class JCodecVideoDecoder implements IVideoDecoder {
     private String url;
     private int width;
@@ -26,8 +30,9 @@ public class JCodecVideoDecoder implements IVideoDecoder {
     private double duration = -1;
     private RingBuffer ringBuffer;
     private DecoderThread thread;
-    private boolean error = false;
-    private String errorMessage = null;
+    private volatile boolean error = false;
+    private volatile String errorMessage = null;
+    private volatile double pendingSeekSec = -1.0;
     @Override
     public void init(String url) throws Exception {
         this.url = url;
@@ -117,7 +122,13 @@ public class JCodecVideoDecoder implements IVideoDecoder {
     }
     @Override
     public void start() {
-        if (thread != null && !thread.isAlive()) {
+        if (thread == null || thread.getState() == Thread.State.TERMINATED) {
+            if (url != null && ringBuffer != null) {
+                thread = new DecoderThread(new File(url), ringBuffer, this);
+                thread.setDaemon(true);
+                thread.start();
+            }
+        } else if (!thread.isAlive()) {
             thread.start();
         }
     }
@@ -126,6 +137,7 @@ public class JCodecVideoDecoder implements IVideoDecoder {
     }
     @Override
     public void seek(double timestampSec) {
+        this.pendingSeekSec = Math.max(0.0, timestampSec);
         if (ringBuffer != null) {
             ringBuffer.clear();
         }
@@ -184,6 +196,16 @@ public class JCodecVideoDecoder implements IVideoDecoder {
                 };
                 int frameIndex = 0;
                 while (running.get()) {
+                    double targetSeek = parent.pendingSeekSec;
+                    if (targetSeek >= 0.0) {
+                        parent.pendingSeekSec = -1.0;
+                        int targetFrame = (int) Math.max(0, Math.min(Math.max(0, frameTotal - 1), Math.round(targetSeek * frameRate)));
+                        try {
+                            videoTrack.gotoFrame(targetFrame);
+                            frameIndex = targetFrame;
+                            buffer.clear();
+                        } catch (Exception ignored) {}
+                    }
                     if (buffer.isFull()) {
                         Thread.sleep(8);
                         continue;

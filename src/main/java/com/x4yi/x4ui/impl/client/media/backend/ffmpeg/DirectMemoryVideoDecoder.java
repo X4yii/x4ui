@@ -2,25 +2,30 @@ package com.x4yi.x4ui.impl.client.media.backend.ffmpeg;
 import com.x4yi.x4ui.api.client.media.IVideoDecoder;
 import com.x4yi.x4ui.api.client.media.VideoFrame;
 import com.x4yi.x4ui.impl.client.media.MediaManager;
+import net.minecraftforge.fml.relauncher.Side;
+import net.minecraftforge.fml.relauncher.SideOnly;
 import org.apache.commons.io.IOUtils;
-import java.io.InputStream;
+import java.io.File;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+
+@SideOnly(Side.CLIENT)
 public class DirectMemoryVideoDecoder implements IVideoDecoder {
     private String url;
     private int width;
     private int height;
     private double duration = -1;
     private double frameRate = 30.0;
-    private boolean error = false;
-    private String errorMessage = null;
+    private volatile boolean error = false;
+    private volatile String errorMessage = null;
     private ByteBuffer[] frameBuffers;
     private int frameSize;
     private int maxFrames = 30;
     private int head = 0;
     private int tail = 0;
-    private int size = 0;
+    private volatile int size = 0;
     private double[] ptsBuffer;
     private VideoFrame currentFrameObj;
     private DecoderThread thread;
@@ -31,12 +36,17 @@ public class DirectMemoryVideoDecoder implements IVideoDecoder {
             throw new Exception("FFmpeg executable not found.");
         }
         try {
-            Process p = new ProcessBuilder(
-                MediaManager.getFfmpegExecutable().getAbsolutePath(),
-                "-i", url
-            ).redirectErrorStream(true).start();
+            java.util.List<String> probeCmd = new java.util.ArrayList<>();
+            probeCmd.add(MediaManager.getFfmpegExecutable().getAbsolutePath());
+            String inputArg = sanitizeFfmpegInput(url, probeCmd);
+            probeCmd.add("-i");
+            probeCmd.add(inputArg);
+            Process p = new ProcessBuilder(probeCmd).redirectErrorStream(true).start();
             String output = IOUtils.toString(p.getInputStream(), "UTF-8");
-            p.waitFor();
+            if (!p.waitFor(15, TimeUnit.SECONDS)) {
+                p.destroyForcibly();
+                throw new Exception("FFmpeg probe timed out");
+            }
             if (output.contains("Video:")) {
                 String[] parts = output.split("Video:")[1].split(",");
                 for (String part : parts) {
@@ -109,11 +119,28 @@ public class DirectMemoryVideoDecoder implements IVideoDecoder {
     public String getErrorMessage() {
         return errorMessage;
     }
+    private static String sanitizeFfmpegInput(String input, java.util.List<String> cmd) throws java.io.IOException {
+        if (input == null || input.trim().isEmpty()) {
+            throw new java.io.IOException("Empty media input");
+        }
+        String trimmed = input.trim();
+        String lower = trimmed.toLowerCase(java.util.Locale.ROOT);
+        if (lower.startsWith("http://") || lower.startsWith("https://")) {
+            com.x4yi.x4ui.impl.client.resource.network.SecurityUtils.validateHttpUrl(trimmed);
+            return trimmed;
+        }
+        File f = new File(trimmed).getCanonicalFile();
+        cmd.add("-protocol_whitelist");
+        cmd.add("file");
+        return "file:" + f.getAbsolutePath();
+    }
+
     @Override
     public void close() {
-        if (thread != null) {
-            thread.stopThread();
-            thread = null;
+        DecoderThread t = this.thread;
+        this.thread = null;
+        if (t != null) {
+            t.stopAndJoin(1500);
         }
         synchronized (this) {
             size = 0;
@@ -143,10 +170,11 @@ public class DirectMemoryVideoDecoder implements IVideoDecoder {
     }
     @Override
     public VideoFrame getNextFrame(long currentTimeMs) {
-        if (size == 0) return null;
         double currentSec = currentTimeMs / 1000.0;
         boolean found = false;
+        double framePts = 0.0;
         synchronized (this) {
+            if (size == 0) return null;
             while (size > 0) {
                 if (ptsBuffer[head] <= currentSec) {
                     found = true;
@@ -160,10 +188,13 @@ public class DirectMemoryVideoDecoder implements IVideoDecoder {
                     break;
                 }
             }
+            if (found) {
+                framePts = ptsBuffer[head];
+            }
         }
         if (found) {
             currentFrameObj.ready = true;
-            currentFrameObj.pts = ptsBuffer[head];
+            currentFrameObj.pts = framePts;
             return currentFrameObj;
         }
         return null;
@@ -180,13 +211,17 @@ public class DirectMemoryVideoDecoder implements IVideoDecoder {
     @Override
     public void seek(double timestampSec) {
         this.startSec = Math.max(0, timestampSec);
+        DecoderThread old = this.thread;
+        boolean wasAlive = old != null && old.isAlive();
+        if (wasAlive) {
+            old.stopAndJoin(1500);
+        }
         synchronized (this) {
             this.head = 0;
             this.tail = 0;
             this.size = 0;
         }
-        if (thread != null && thread.isAlive()) {
-            thread.stopThread();
+        if (wasAlive) {
             thread = new DecoderThread(startSec);
             thread.setDaemon(true);
             thread.start();
@@ -209,7 +244,7 @@ public class DirectMemoryVideoDecoder implements IVideoDecoder {
     private class DecoderThread extends Thread {
         private final AtomicBoolean running = new AtomicBoolean(true);
         private final double seekOffset;
-        private Process process;
+        private volatile Process process;
         public DecoderThread() {
             this(0.0);
         }
@@ -219,10 +254,32 @@ public class DirectMemoryVideoDecoder implements IVideoDecoder {
         }
         public void stopThread() {
             running.set(false);
-            if (process != null) {
-                process.destroy();
+            Process p = this.process;
+            if (p != null) {
+                p.destroy();
             }
             this.interrupt();
+        }
+        public void stopAndJoin(long timeoutMs) {
+            stopThread();
+            if (this.isAlive() && Thread.currentThread() != this) {
+                try {
+                    this.join(timeoutMs);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+                if (this.isAlive()) {
+                    Process p = this.process;
+                    if (p != null) {
+                        p.destroyForcibly();
+                    }
+                    try {
+                        this.join(500);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                    }
+                }
+            }
         }
         @Override
         public void run() {
@@ -234,7 +291,8 @@ public class DirectMemoryVideoDecoder implements IVideoDecoder {
                     cmd.add("-ss");
                     cmd.add(String.format(java.util.Locale.US, "%.3f", seekOffset));
                 }
-                cmd.add("-i"); cmd.add(url);
+                String inputArg = sanitizeFfmpegInput(url, cmd);
+                cmd.add("-i"); cmd.add(inputArg);
                 cmd.add("-f"); cmd.add("rawvideo");
                 cmd.add("-pix_fmt"); cmd.add("bgra");
                 cmd.add("-s"); cmd.add(width + "x" + height);
@@ -245,25 +303,24 @@ public class DirectMemoryVideoDecoder implements IVideoDecoder {
                 int frameIndex = (int) (seekOffset * frameRate);
                 while (running.get()) {
                     boolean full;
+                    int currentTail;
+                    ByteBuffer targetBuf;
                     synchronized (DirectMemoryVideoDecoder.this) {
                         full = (size == maxFrames);
+                        currentTail = tail;
+                        targetBuf = (!full && frameBuffers != null && currentTail < frameBuffers.length) ? frameBuffers[currentTail] : null;
                     }
                     if (full) {
                         Thread.sleep(5);
                         continue;
                     }
-                    int currentTail;
-                    synchronized (DirectMemoryVideoDecoder.this) {
-                        currentTail = tail;
-                    }
-                    ByteBuffer targetBuf = (frameBuffers != null && currentTail < frameBuffers.length) ? frameBuffers[currentTail] : null;
                     if (targetBuf == null) break;
                     targetBuf.clear();
                     while (targetBuf.hasRemaining() && running.get()) {
                         int r = channel.read(targetBuf);
                         if (r == -1) break;
                     }
-                    if (targetBuf.hasRemaining()) break;
+                    if (!running.get() || targetBuf.hasRemaining()) break;
                     targetBuf.flip();
                     synchronized (DirectMemoryVideoDecoder.this) {
                         ptsBuffer[currentTail] = frameIndex / frameRate;
@@ -273,14 +330,18 @@ public class DirectMemoryVideoDecoder implements IVideoDecoder {
                     frameIndex++;
                 }
             } catch (Exception e) {
-                org.apache.logging.log4j.LogManager.getLogger("x4ui").warn("[X4UI Video] FFmpeg process error: {}", e.getMessage());
                 if (running.get()) {
+                    org.apache.logging.log4j.LogManager.getLogger("x4ui").warn("[X4UI Video] FFmpeg process error: {}", e.getMessage());
                     String msg = (e.getMessage() != null && !e.getMessage().isEmpty()) ? e.getMessage() : e.getClass().getSimpleName();
                     setError("FFmpeg Process Error: " + msg);
                 }
             } finally {
-                if (process != null) {
-                    process.destroy();
+                Process p = this.process;
+                if (p != null) {
+                    p.destroy();
+                    if (p.isAlive()) {
+                        p.destroyForcibly();
+                    }
                 }
             }
         }

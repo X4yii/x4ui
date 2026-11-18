@@ -22,7 +22,7 @@ public class PacketGuiAction implements IMessage {
 
     @Override
     public void fromBytes(ByteBuf buf) {
-        this.actionId = ByteBufUtils.readUTF8String(buf);
+        this.actionId = UINetwork.readBoundedUtf8(buf, 128);
         if (buf.readBoolean()) {
             this.data = ByteBufUtils.readTag(buf);
         } else {
@@ -46,10 +46,12 @@ public class PacketGuiAction implements IMessage {
         public IMessage onMessage(PacketGuiAction message, MessageContext ctx) {
             if (ctx.side != Side.SERVER) return null;
             final EntityPlayerMP player = ctx.getServerHandler().player;
-            if (player == null || message.actionId == null || message.actionId.isEmpty()) return null;
-            player.getServerWorld().addScheduledTask(() ->
-                    UINetwork.dispatchActionOnServer(player, message.actionId, message.data)
-            );
+            if (player == null || player.world == null || message.actionId == null || message.actionId.isEmpty()) return null;
+            player.getServerWorld().addScheduledTask(() -> {
+                if (!player.hasDisconnected()) {
+                    UINetwork.dispatchActionOnServer(player, message.actionId, message.data);
+                }
+            });
             return null;
         }
     }

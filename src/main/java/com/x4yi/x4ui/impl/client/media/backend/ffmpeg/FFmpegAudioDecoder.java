@@ -2,15 +2,20 @@ package com.x4yi.x4ui.impl.client.media.backend.ffmpeg;
 import com.x4yi.x4ui.api.client.media.IAudioDecoder;
 import com.x4yi.x4ui.impl.client.media.MediaManager;
 import com.x4yi.x4ui.impl.client.media.backend.OpenALAudioSink;
+import net.minecraftforge.fml.relauncher.Side;
+import net.minecraftforge.fml.relauncher.SideOnly;
+import java.io.File;
 import java.io.InputStream;
 import java.util.concurrent.atomic.AtomicBoolean;
+
+@SideOnly(Side.CLIENT)
 public class FFmpegAudioDecoder implements IAudioDecoder {
     private String url;
     private OpenALAudioSink audioSink;
     private AudioDecoderThread thread;
     private double duration = -1;
-    private boolean error = false;
-    private String errorMessage = null;
+    private volatile boolean error = false;
+    private volatile String errorMessage = null;
     private float volume = 1.0f;
     private boolean muted = false;
     @Override
@@ -29,11 +34,15 @@ public class FFmpegAudioDecoder implements IAudioDecoder {
     @Override
     public void seek(double timestampSec) {
         this.startSec = Math.max(0, timestampSec);
+        AudioDecoderThread old = this.thread;
+        boolean wasAlive = old != null && old.isAlive();
+        if (wasAlive) {
+            old.stopAndJoin(1500);
+        }
         if (audioSink != null) {
             audioSink.flush(startSec);
         }
-        if (thread != null && thread.isAlive()) {
-            thread.stopThread();
+        if (wasAlive) {
             thread = new AudioDecoderThread(startSec);
             thread.setDaemon(true);
             thread.start();
@@ -58,9 +67,10 @@ public class FFmpegAudioDecoder implements IAudioDecoder {
     }
     @Override
     public void close() {
-        if (thread != null) {
-            thread.stopThread();
-            thread = null;
+        AudioDecoderThread t = this.thread;
+        this.thread = null;
+        if (t != null) {
+            t.stopAndJoin(1500);
         }
         if (audioSink != null) {
             audioSink.close();
@@ -115,17 +125,39 @@ public class FFmpegAudioDecoder implements IAudioDecoder {
     private class AudioDecoderThread extends Thread {
         private final AtomicBoolean running = new AtomicBoolean(true);
         private final double seekOffset;
-        private Process process;
+        private volatile Process process;
         public AudioDecoderThread(double seekOffset) {
             this.seekOffset = seekOffset;
             this.setName("X4UI-FFmpegAudioDecoder");
         }
         public void stopThread() {
             running.set(false);
-            if (process != null) {
-                process.destroy();
+            Process p = this.process;
+            if (p != null) {
+                p.destroy();
             }
             this.interrupt();
+        }
+        public void stopAndJoin(long timeoutMs) {
+            stopThread();
+            if (this.isAlive() && Thread.currentThread() != this) {
+                try {
+                    this.join(timeoutMs);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+                if (this.isAlive()) {
+                    Process p = this.process;
+                    if (p != null) {
+                        p.destroyForcibly();
+                    }
+                    try {
+                        this.join(500);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                    }
+                }
+            }
         }
         @Override
         public void run() {
@@ -137,7 +169,19 @@ public class FFmpegAudioDecoder implements IAudioDecoder {
                     cmd.add("-ss");
                     cmd.add(String.format(java.util.Locale.US, "%.3f", seekOffset));
                 }
-                cmd.add("-i"); cmd.add(url);
+                String trimmed = url != null ? url.trim() : "";
+                String lower = trimmed.toLowerCase(java.util.Locale.ROOT);
+                String inputArg;
+                if (lower.startsWith("http://") || lower.startsWith("https://")) {
+                    com.x4yi.x4ui.impl.client.resource.network.SecurityUtils.validateHttpUrl(trimmed);
+                    inputArg = trimmed;
+                } else {
+                    File f = new File(trimmed).getCanonicalFile();
+                    cmd.add("-protocol_whitelist");
+                    cmd.add("file");
+                    inputArg = "file:" + f.getAbsolutePath();
+                }
+                cmd.add("-i"); cmd.add(inputArg);
                 cmd.add("-f"); cmd.add("s16le");
                 cmd.add("-acodec"); cmd.add("pcm_s16le");
                 cmd.add("-ac"); cmd.add("2");
@@ -150,8 +194,9 @@ public class FFmpegAudioDecoder implements IAudioDecoder {
                 while (running.get()) {
                     int r = is.read(buffer, 0, buffer.length);
                     if (r == -1) break;
-                    if (audioSink != null) {
-                        audioSink.writePCM(buffer, 0, r);
+                    OpenALAudioSink sink = audioSink;
+                    if (sink != null) {
+                        sink.writePCM(buffer, 0, r);
                     }
                 }
             } catch (Exception e) {
@@ -159,8 +204,12 @@ public class FFmpegAudioDecoder implements IAudioDecoder {
                     setError("FFmpeg Audio Process Error: " + e.getMessage());
                 }
             } finally {
-                if (process != null) {
-                    process.destroy();
+                Process p = this.process;
+                if (p != null) {
+                    p.destroy();
+                    if (p.isAlive()) {
+                        p.destroyForcibly();
+                    }
                 }
             }
         }

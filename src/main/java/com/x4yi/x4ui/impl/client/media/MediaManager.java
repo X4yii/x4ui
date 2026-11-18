@@ -1,5 +1,6 @@
 package com.x4yi.x4ui.impl.client.media;
-import net.minecraftforge.fml.common.ProgressManager;
+import net.minecraftforge.fml.relauncher.Side;
+import net.minecraftforge.fml.relauncher.SideOnly;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import java.io.File;
@@ -10,18 +11,19 @@ import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+
+@SideOnly(Side.CLIENT)
 public class MediaManager {
     private static final Logger LOGGER = LogManager.getLogger("x4ui");
-    private static boolean mediaEngineRequired = false;
+    private static final AtomicBoolean mediaEngineRequired = new AtomicBoolean(false);
     private static AtomicBoolean downloadFinished = new AtomicBoolean(false);
     private static AtomicInteger downloadProgress = new AtomicInteger(0);
-    private static String downloadStatus = "";
+    private static volatile String downloadStatus = "";
     private static File binDir;
     private static volatile File ffmpegExecutable;
     private static volatile String ffmpegSource = "not-found";
     public static void requireMediaEngine() {
-        if (mediaEngineRequired) return;
-        mediaEngineRequired = true;
+        if (!mediaEngineRequired.compareAndSet(false, true)) return;
         Thread downloader = new Thread(MediaManager::downloadFFmpegProcess);
         downloader.setName("X4UI-FFmpeg-Resolver");
         downloader.setDaemon(true);
@@ -181,32 +183,6 @@ public class MediaManager {
             downloadFinished.set(true);
         }
     }
-    public static void blockUntilDownloaded() {
-        if (!mediaEngineRequired) return;
-        if (downloadFinished.get()) return;
-        ProgressManager.ProgressBar bar = ProgressManager.push("X4UI Media Engine", 100);
-        int lastProgress = 0;
-        int timeoutTicks = 0;
-        while (!downloadFinished.get() && timeoutTicks < 600) {
-            int current = downloadProgress.get();
-            if (current > lastProgress) {
-                for (int i = lastProgress; i < current; i++) {
-                    bar.step(downloadStatus);
-                }
-                lastProgress = current;
-            }
-            try {
-                Thread.sleep(50);
-                timeoutTicks++;
-            } catch (InterruptedException e) {
-                break;
-            }
-        }
-        for (int i = lastProgress; i < 100; i++) {
-            bar.step("Done");
-        }
-        ProgressManager.pop(bar);
-    }
     public static boolean isDownloadFinished() {
         return downloadFinished.get();
     }
@@ -217,24 +193,22 @@ public class MediaManager {
         return downloadStatus;
     }
     public static boolean isMediaEngineRequired() {
-        return mediaEngineRequired;
+        return mediaEngineRequired.get();
     }
     public static File getFfmpegExecutable() {
         return ffmpegExecutable;
     }
     private static String getSHA256(File file) {
-        try {
+        try (FileInputStream fis = new FileInputStream(file)) {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            FileInputStream fis = new FileInputStream(file);
             byte[] byteArray = new byte[8192];
-            int bytesCount = 0; 
+            int bytesCount;
             while ((bytesCount = fis.read(byteArray)) != -1) {
                 digest.update(byteArray, 0, bytesCount);
             }
-            fis.close();
             byte[] bytes = digest.digest();
             StringBuilder sb = new StringBuilder();
-            for (int i=0; i< bytes.length ;i++) {
+            for (int i = 0; i < bytes.length; i++) {
                 sb.append(Integer.toString((bytes[i] & 0xff) + 0x100, 16).substring(1));
             }
             return sb.toString();

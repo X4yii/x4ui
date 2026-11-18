@@ -40,25 +40,6 @@ public final class SecurityUtils {
         return target;
     }
 
-    public static String sanitizeExtension(String urlStr, String defaultExt) {
-        if (urlStr == null) return defaultExt;
-        String path = urlStr;
-        int qIdx = path.indexOf('?');
-        if (qIdx != -1) path = path.substring(0, qIdx);
-        int hIdx = path.indexOf('#');
-        if (hIdx != -1) path = path.substring(0, hIdx);
-        int lastSlash = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'));
-        String fileName = (lastSlash >= 0) ? path.substring(lastSlash + 1) : path;
-        int lastDot = fileName.lastIndexOf('.');
-        if (lastDot >= 0) {
-            String ext = fileName.substring(lastDot).toLowerCase(Locale.ROOT);
-            if (ext.matches("\\.[a-z0-9]{1,8}")) {
-                return ext;
-            }
-        }
-        return defaultExt;
-    }
-
     public static HttpURLConnection openValidatedHttpConnection(String urlStr) throws IOException {
         String currentUrl = urlStr;
         for (int redirects = 0; redirects <= MAX_REDIRECTS; redirects++) {
@@ -79,8 +60,12 @@ public final class SecurityUtils {
                 if (location == null || location.trim().isEmpty()) {
                     throw new IOException("Redirect without Location header (HTTP " + code + ")");
                 }
-                URI resolved = URI.create(currentUrl).resolve(location.trim());
-                currentUrl = resolved.toString();
+                try {
+                    URI resolved = URI.create(currentUrl).resolve(location.trim());
+                    currentUrl = resolved.toString();
+                } catch (IllegalArgumentException e) {
+                    throw new IOException("Malformed redirect Location: " + location, e);
+                }
                 continue;
             }
             if (code >= 400) {
@@ -101,6 +86,9 @@ public final class SecurityUtils {
         if (!"http".equals(protocol) && !"https".equals(protocol)) {
             throw new SecurityException("Unsupported URL protocol: " + protocol);
         }
+        if (url.getUserInfo() != null && !url.getUserInfo().isEmpty()) {
+            throw new SecurityException("URL userinfo is not allowed");
+        }
         String host = url.getHost();
         if (host == null || host.isEmpty()) {
             throw new IOException("URL has no host: " + urlStr);
@@ -108,15 +96,40 @@ public final class SecurityUtils {
         if (!Boolean.getBoolean("x4ui.allowLocalMedia")) {
             InetAddress[] addresses = InetAddress.getAllByName(host);
             for (InetAddress addr : addresses) {
-                if (addr.isAnyLocalAddress()
-                        || addr.isLoopbackAddress()
-                        || addr.isLinkLocalAddress()
-                        || addr.isSiteLocalAddress()) {
+                if (isBlockedAddress(addr)) {
                     throw new SecurityException("Blocked local/private network address: " + host);
                 }
             }
         }
         return url;
+    }
+
+    public static boolean isBlockedAddress(InetAddress addr) {
+        if (addr == null) return true;
+        if (addr.isAnyLocalAddress()
+                || addr.isLoopbackAddress()
+                || addr.isLinkLocalAddress()
+                || addr.isSiteLocalAddress()
+                || addr.isMulticastAddress()) {
+            return true;
+        }
+        byte[] b = addr.getAddress();
+        if (b.length == 4) {
+            int b0 = b[0] & 0xFF;
+            int b1 = b[1] & 0xFF;
+            int b2 = b[2] & 0xFF;
+            if (b0 == 0) return true; // 0.0.0.0/8
+            if (b0 == 100 && (b1 & 0xC0) == 64) return true; // 100.64.0.0/10 CGNAT
+            if (b0 == 169 && b1 == 254) return true; // 169.254.0.0/16 link-local
+            if (b0 == 192 && b1 == 0 && b2 == 0) return true; // 192.0.0.0/24 IETF protocol
+            if (b0 == 198 && (b1 == 18 || b1 == 19)) return true; // 198.18.0.0/15 benchmark
+        } else if (b.length == 16) {
+            int b0 = b[0] & 0xFF;
+            int b1 = b[1] & 0xFF;
+            if ((b0 & 0xFE) == 0xFC) return true; // fc00::/7 IPv6 ULA
+            if (b0 == 0xFE && (b1 & 0xC0) == 0x80) return true; // fe80::/10 link-local
+        }
+        return false;
     }
 
     public static String sha256Hex(String input) {

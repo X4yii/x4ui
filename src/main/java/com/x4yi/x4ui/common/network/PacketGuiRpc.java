@@ -47,12 +47,12 @@ public class PacketGuiRpc implements IMessage {
         this.isResponse = buf.readBoolean();
         this.requestId = buf.readLong();
         if (!this.isResponse) {
-            this.rpcId = ByteBufUtils.readUTF8String(buf);
+            this.rpcId = UINetwork.readBoundedUtf8(buf, 128);
             this.payload = buf.readBoolean() ? ByteBufUtils.readTag(buf) : null;
         } else {
             this.ok = buf.readBoolean();
-            this.errorCode = ByteBufUtils.readUTF8String(buf);
-            this.errorMessage = ByteBufUtils.readUTF8String(buf);
+            this.errorCode = UINetwork.readBoundedUtf8(buf, 64);
+            this.errorMessage = UINetwork.readBoundedUtf8(buf, 512);
             this.payload = buf.readBoolean() ? ByteBufUtils.readTag(buf) : null;
         }
     }
@@ -87,10 +87,11 @@ public class PacketGuiRpc implements IMessage {
         public IMessage onMessage(PacketGuiRpc message, MessageContext ctx) {
             if (ctx.side == Side.SERVER && !message.isResponse) {
                 final EntityPlayerMP player = ctx.getServerHandler().player;
-                if (player == null || message.rpcId == null || message.rpcId.isEmpty()) {
+                if (player == null || player.world == null || message.rpcId == null || message.rpcId.isEmpty()) {
                     return null;
                 }
                 player.getServerWorld().addScheduledTask(() -> {
+                    if (player.hasDisconnected()) return;
                     RpcResult res = UINetwork.dispatchRpcOnServer(player, message.rpcId, message.payload);
                     UINetwork.CHANNEL.sendTo(PacketGuiRpc.response(message.requestId, res), player);
                 });
@@ -98,7 +99,7 @@ public class PacketGuiRpc implements IMessage {
                 RpcResult res = message.ok
                         ? RpcResult.ok(message.payload)
                         : RpcResult.error(message.errorCode, message.errorMessage);
-                UINetwork.completeRpcOnClient(message.requestId, res);
+                com.x4yi.x4ui.X4UI.proxy.handleClientRpcResponse(message.requestId, res);
             }
             return null;
         }
