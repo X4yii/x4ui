@@ -1,6 +1,8 @@
 # 03 - Redes, Sidedness y Sincronización Servidor/Cliente
 
-Este documento describe la arquitectura de red de X4UI (`r1.0b6`), diseñada para operar **tanto con `Container` vanilla como sin ningún `Container`** (paneles administrativos, tiendas, diálogos, gremios, HUDs remotos y máquinas personalizadas).
+Este documento describe la arquitectura de red de X4UI (`r1.0b7`), diseñada para operar **tanto con `Container` vanilla como sin ningún `Container`** (paneles administrativos, tiendas, diálogos, gremios, HUDs remotos y máquinas personalizadas).
+
+> **Política de Conexión (`r1.0b7`):** Un cliente con X4UI puede conectarse a servidores vanilla sin X4UI (modo fallback client-only mediante `UINetwork.isServerSupported()` / `sendActionOrLocal(...)`). Cuando un servidor tiene X4UI instalado, exige que el cliente también tenga X4UI (`@NetworkCheckHandler`) para garantizar sincronización consistente de estado y RPCs.
 
 ---
 
@@ -100,7 +102,7 @@ request("mymod:search_catalog", queryNbt, result -> {
 });
 ```
 
-El framework ejecuta el handler en el hilo del servidor, entrega la respuesta en el hilo principal del cliente, aplica timeout (`5s` por defecto), responde `NO_SERVER_SUPPORT` de inmediato si el servidor no tiene X4UI y cancela automáticamente los callbacks pendientes al cerrar la pantalla.
+El framework ejecuta el handler en el hilo del servidor, entrega la respuesta en el hilo principal del cliente, aplica timeout (`5s` por defecto, barrido automáticamente vía `ScreenHost` tanto en `GuiBaseScreen` como en `GuiBaseContainer`), responde `NO_SERVER_SUPPORT` de inmediato si el servidor no tiene X4UI y cancela automáticamente los callbacks pendientes al cerrar la pantalla.
 
 ---
 
@@ -124,7 +126,7 @@ Al cerrar la pantalla (`onGuiClosed()`) o desconectarse (`ClientSessionTracker`)
 
 ## 6. Seguridad en Red (`ActionGuard` y Rate-Limiting)
 
-- **Rate-limiting integrado:** `UINetwork` aplica por defecto un cooldown de `50ms` por jugador y por `actionId`/`rpcId` (configurable mediante `UINetwork.setDefaultRateLimitMs(ms)`).
+- **Rate-limiting integrado:** `UINetwork` aplica por defecto un cooldown de `50ms` por jugador y por `actionId`/`rpcId` (configurable mediante `UINetwork.setDefaultRateLimitMs(ms)`). Las entradas por jugador se liberan automáticamente al desconectarse mediante `UINetwork.clearPlayerRateLimits(UUID)` desde `ClientSessionTracker`.
 - **Guardas componibles (`ActionGuard`):**
   - `ActionGuard.opLevel(int level)`
   - `ActionGuard.withinDistance(BlockPos pos, double maxDist)`

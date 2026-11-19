@@ -1,4 +1,4 @@
-# Contenedores y Paneles (`GuiPanel`, `GuiCard`, `GuiScrollPanel`, `GuiSlot`)
+# Contenedores y Paneles (`GuiPanel`, `GuiUnionPanel`, `GuiScrollPanel`, `GuiGridPanel`, `GuiSlot`)
 
 Los contenedores organizan la jerarquía visual, gestionan el diseño mediante `ILayoutManager` (`FlexLayout`) y controlan el recorte (*clipping*) de sus hijos.
 
@@ -6,7 +6,7 @@ Los contenedores organizan la jerarquía visual, gestionan el diseño mediante `
 
 ## 1. `GuiPanel` y Primitivas Semánticas
 
-`GuiPanel` es el contenedor estructural base. En `r1.0b6` provee constructores estáticos orientados al estándar responsivo:
+`GuiPanel` es el contenedor estructural base. Soporta radios independientes por esquina (`withCornerRadii`), bordes selectivos por lado (`withBorderSides`) y constructores estáticos orientados al estándar responsivo:
 
 ```java
 // Contenedor en columna (VERTICAL, hugContent=true, 100% ancho)
@@ -20,54 +20,48 @@ row.addChild(new GuiButton(0, 0, 20, 20, "X", this::closeScreen));
 
 // Tarjeta temática con padding y hugContent automático
 GuiPanel card = GuiPanel.card(10, 6);
-```
 
-También es posible configurar manualmente la dirección, alineación (`FlexAlign`) y relleno:
-
-```java
-GuiPanel panel = new GuiPanel(0, 0, 0, 0).withPercentWidth(1.0f);
-panel.setFlexDirection(FlexDirection.VERTICAL);
-panel.setGap(6);
-panel.setPadding(new Insets(10));
+// Pestaña superior sin borde inferior y esquinas superiores redondeadas
+GuiPanel tab = new GuiPanel(0, 0, 80, 22)
+    .withCornerRadii(CornerRadii.top(6))
+    .withBorderSides(BorderSides.without(BorderSides.ALL, BorderSides.BOTTOM));
 ```
 
 ---
 
-## 2. `GuiCard`
+## 2. `GuiUnionPanel` (Alas Acopladas sin Costuras)
 
-`GuiCard` extiende `GuiPanel` con título integrado y estilo de tarjeta del tema activo:
+`GuiUnionPanel` extiende `GuiPanel` para acoplar paneles laterales (`attachWing(DockSide, GuiPanel, int offset)`) que se funden en **un único fondo continuo** (rectángulos disjuntos sin doble alpha) y un **contorno exterior inteligente** (suprimiendo las aristas compartidas y aplanando esquinas en contacto):
 
 ```java
-GuiCard card = (GuiCard) new GuiCard(0, 0, 0, 120, "Estadísticas")
-    .withPercentWidth(1.0f);
+GuiUnionPanel union = new GuiUnionPanel(0, 0, 176, 166);
+union.setBackgroundColor(0xFF1A1D24);
+union.setBorderWidth(1);
+union.setBorderColor(0xFF2D333F);
+union.setCornerRadius(6);
+
+GuiPanel configWing = new GuiPanel(0, 0, 64, 96);
+union.attachWing(DockSide.RIGHT, configWing, 12);
 ```
 
 ---
 
-## 3. `GuiScrollPanel`
+## 3. Tarjetas (`GuiPanel.card`), `GuiScrollPanel` y `GuiGridPanel`
 
-`GuiScrollPanel` encapsula un sub-contenedor interno (`contentPanel`) dentro de un viewport con recorte hardware y desplazamiento normalizado (`UIInput`):
+- **`GuiPanel.card(...)`:** crea una tarjeta temática con título opcional y padding por defecto (reemplaza al antiguo `GuiCard` eliminado en `r1.0b7`).
+- **`GuiScrollPanel`:** encapsula `contentPanel` dentro de un viewport con recorte hardware y desplazamiento normalizado (`GuiScrollPanel.vertical(220, 6)`).
+- **`GuiGridPanel`:** extiende `GuiScrollPanel` con cálculo automático de columnas (`autoColumns`), reserva de scrollbar en 1 sola pasada y helper `addSlots(...)`:
 
 ```java
-// Forma recomendada: scroll vertical preconfigurado
-GuiScrollPanel scroll = GuiScrollPanel.vertical(220, 6);
-scroll.addChild(card1); // addChild() redirige internamente hacia contentPanel
-scroll.addChild(card2);
+GuiGridPanel grid = GuiGridPanel.slotGrid(120, 2);
+grid.addSlots(inventorySlots.inventorySlots, this);
 ```
-
-Cuando el contenido supera la altura del viewport, `GuiScrollPanel` reserva automáticamente el espacio de la barra de desplazamiento para evitar recorte horizontal.
 
 ---
 
-## 4. `GuiSlot`
+## 4. `GuiSlot` y `GuiBaseContainer.attachSidePanel`
 
-`GuiSlot` vincula un `Slot` de inventario vanilla dentro de `GuiBaseContainer` al árbol de componentes:
-
-```java
-for (Slot slot : inventorySlots.inventorySlots) {
-    rootPanel.addChild(new GuiSlot(slot, this));
-}
-```
+`GuiSlot` vincula un `Slot` de inventario vanilla dentro de `GuiBaseContainer` y se resincroniza instantáneamente ante cambios de layout (`onBoundsChanged()`). En `GuiBaseContainer`, `attachSidePanel(DockSide, GuiComponent)` acopla paneles laterales a la ventana principal manteniendo todo dentro de la pantalla, actualizando `jeiRecipeAreas` y evitando el dropeo accidental de ítems en `hasClickedOutside`.
 
 ---
 

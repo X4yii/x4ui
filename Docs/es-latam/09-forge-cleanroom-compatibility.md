@@ -1,6 +1,6 @@
 # 09 - Compatibilidad Forge 1.12.2 ↔ CleanroomMC y Abstracciones
 
-X4UI (`r1.0b6`) soporta oficialmente **Forge 1.12.2 (Java 8 + LWJGL 2)** y **CleanroomMC (Java 25 + LWJGL 3 / `lwjgly`)**. Este documento detalla las decisiones de arquitectura Multi-Release y las reglas de portabilidad para mods consumidores.
+X4UI (`r1.0b7`) soporta oficialmente **Forge 1.12.2 (Java 8 + LWJGL 2)** y **CleanroomMC (Java 25 + LWJGL 3 / `lwjgly`)**. Este documento detalla las decisiones de arquitectura Multi-Release y las reglas de portabilidad para mods consumidores.
 
 ---
 

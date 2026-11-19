@@ -36,15 +36,21 @@ mediaFuture.thenAccept(file -> {
     // Explicit handling for network, validation, or codec errors
     return null;
 });
+
+// Optional cache maintenance: remove cached files older than 7 days for this mod
+MediaPipeline.getInstance().cleanCache("mymodid", 7);
 ```
+
+> **`r1.0b7` Note:** `MediaPipeline` + `MediaManager` supersede and replace the removed legacy classes (`DownloadManager`, `RemoteResourceManager`, `IMediaService`, and `MediaService`).
 
 ---
 
 ## 3. Network & Filesystem Security (`SecurityUtils`)
 
 Before executing downloads or writing cache files, `SecurityUtils` enforces:
-- `validateHttpUrl(...)`: restricts schemes to `http`/`https` and blocks loopback, link-local, and private network ranges (SSRF protection).
+- `validateHttpUrl(...)`: restricts schemes to `http`/`https`, validates redirects manually, and blocks loopback, link-local, multicast, and private IPv4/IPv6 network ranges (SSRF protection).
 - `resolveSafeChild(...)`: canonicalizes paths and rejects directory traversal (`..`) outside the mod's cache directory.
+- Cache cleanup: `MediaPipeline.getInstance().cleanCache(modId, daysOld)` purges stale cached files inside the mod's cache directory.
 
 ---
 

@@ -36,10 +36,9 @@ rootPanel (GuiPanel)
 ### Operaciones sobre el Árbol
 
 ```java
-GuiPanel panel = new GuiPanel(0, 0, 0, 300).withPercentWidth(1.0f);
-GuiButton btn = (GuiButton) new GuiButton(0, 0, 0, 20, "Aceptar", () -> {}).withPercentWidth(0.5f);
+GuiPanel panel = GuiPanel.column(10, 6).withPercentWidth(1.0f);
+GuiButton btn = panel.add(GuiButton.of("Aceptar", () -> {}), b -> b.withPercentWidth(0.5f));
 
-panel.addChild(btn);       // Adjunta btn e invoca onAttached()
 panel.removeChild(btn);    // Separa btn e invoca onDetached()
 panel.clearChildren();     // Separa y destruye todos los hijos
 ```
@@ -75,7 +74,7 @@ Los eventos de mouse (`mouseClicked`, `mouseReleased`, `mouseDragged`, `mouseScr
 ## 5. Estado Reactivo (`State<T>`) y Bus de Estados (`UIStateBus`)
 
 ### `State<T>`
-`com.x4yi.x4ui.common.State<T>` es un contenedor observable seguro para hilos y compatible con servidor dedicado. Deduplica notificaciones mediante `Objects.equals()` para evitar trabajo redundante cuando el valor no cambia:
+`com.x4yi.x4ui.common.State<T>` es un contenedor observable seguro para hilos (`volatile` + serialización de notificaciones en `set(T)` para evitar condiciones de carrera entre hilos Netty/I/O y el hilo principal) y compatible con servidor dedicado. Deduplica notificaciones mediante `Objects.equals()` y aísla excepciones por listener para que un fallo en un suscriptor no interrumpa a los demás:
 
 ```java
 State<Integer> score = new State<>(0);
@@ -110,10 +109,13 @@ rootPanel.setTheme(ThemeRegistry.getTheme("custom_dark"));
 
 ---
 
-## 7. Optimización mediante Dirty Flags
+## 7. Optimización mediante Dirty Flags, `ScreenHost` y Caché de Coordenadas
 
 - `requestLayout()`: marca que las dimensiones o la jerarquía estructural cambiaron; el layout se recalculará una única vez en el siguiente `update()`.
 - `requestRender()`: solicita reordenar las capas visuales (`layer`).
+- **Caché de Coordenadas Absolutas:** `GuiComponent` cachea `absX`/`absY` e invalida en cascada solo al mutar `x`, `y` o `parent`, evitando recorrer toda la cadena de padres en cada hit-test o dibujo.
+- **`ScreenHost` Unificado:** `GuiBaseScreen` y `GuiBaseContainer` delegan la lógica compartida a `ScreenHost` — seguimiento y expiración unificada de RPCs, `deltaTime`, tooltips multilínea cacheados, animación opcional de apertura independiente de FPS (`setAnimateOpen(boolean)`) y limpieza automática en `onGuiClosed()`.
+- **Composición sin Casts:** `GuiComponent.add(T child)` y `add(T child, Consumer<T> config)` (delegados también en `GuiScrollPanel`) retornan el tipo exacto del hijo para evitar casts manuales.
 - Las mutaciones puramente visuales (color, opacidad, texto cuando no altera tamaño estructural) no requieren `requestLayout()`.
 
 ---

@@ -1,6 +1,6 @@
 # 06 - Tipografía Vectorial y Fuentes (`IFont`)
 
-Este documento detalla el sistema de tipografía de X4UI (`r1.0b6`), centrado en la interfaz `IFont` (`com.x4yi.x4ui.api.client.font.IFont`) y el registro central `FontRegistry`.
+Este documento detalla el sistema de tipografía de X4UI (`r1.0b7`), centrado en la interfaz `IFont` (`com.x4yi.x4ui.api.client.font.IFont`) y el registro central `FontRegistry`.
 
 ---
 
@@ -10,7 +10,7 @@ El `FontRenderer` de vanilla está limitado a texturas bitmap fijas que se pixel
 
 X4UI resuelve esto mediante:
 1. **Abstracción `IFont`:** Unifica `VanillaFont` y `TrueTypeFont` bajo un mismo contrato de medición y dibujado.
-2. **Atlas dinámico en VRAM (`TrueTypeFont`):** Rasteriza glifos bajo demanda con anti-aliasing y soporte completo de códigos vanilla (`§0`–`§f`, `§l`, `§o`, `§n`).
+2. **Atlas dinámico en VRAM (`TrueTypeFont`):** Rasteriza glifos bajo demanda con anti-aliasing y soporte completo de códigos vanilla (`§0`–`§f`, `§l`, `§o`, `§n`). Tras subir la textura a GPU (`DynamicTexture`), el `BufferedImage` del atlas (~4 MB por fuente) se libera de inmediato del heap.
 3. **Caché LRU de anchos (`FontWidthCache`):** Almacena mediciones repetidas con evicción acotada para evitar fugas de memoria en interfaces ricas en texto.
 4. **Ciclo de vida centralizado (`FontRegistry`):** Gestiona carga única y recarga transparente en caliente al pulsar `F3 + T`.
 

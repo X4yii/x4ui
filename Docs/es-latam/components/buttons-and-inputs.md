@@ -1,6 +1,6 @@
 # Botones y Entradas (`GuiButton`, `GuiTextInput`, `GuiToggle`, `GuiSlider`)
 
-Los componentes interactivos primarios operan bajo el paradigma reactivo de X4UI (`State<T>`) y la API fluida de `GuiComponent`, eliminando el acoplamiento manual de eventos.
+Los componentes interactivos primarios operan bajo el paradigma reactivo de X4UI (`State<T>`) y la API fluida de `GuiComponent`, eliminando el acoplamiento manual de eventos. En `r1.0b7`, los widgets principales proveen factories flex-first `.of(...)` y setters fluidos covariantes (`withPercentWidth`, `withMargin`, `withFlexGrow`, `withFlexShrink`, `withMinSize`, `withMaxSize`, `withTooltip`), eliminando casts manuales.
 
 ---
 
@@ -9,7 +9,7 @@ Los componentes interactivos primarios operan bajo el paradigma reactivo de X4UI
 Botón interactivo con variantes temáticas (`DEFAULT`, `PRIMARY`, `SECONDARY`, `SUCCESS`, `DANGER`, `GHOST`) y soporte de tooltips:
 
 ```java
-GuiButton saveBtn = (GuiButton) new GuiButton(0, 0, 0, 22, "Guardar", () -> {
+GuiButton saveBtn = GuiButton.of("Guardar", () -> {
     // Acción al hacer clic
 })
     .withPercentWidth(1.0f)
@@ -26,7 +26,7 @@ Campo de texto con foco automático, cursor, selección, portapapeles y enlace b
 ```java
 State<String> username = new State<>("");
 
-GuiTextInput input = (GuiTextInput) new GuiTextInput(0, 0, 0, 20, username)
+GuiTextInput input = GuiTextInput.of(username)
     .setSubmitKey(KeyCodes.ENTER)
     .onEnter(() -> submitForm(username.get()))
     .setOnTextChanged(txt -> {
@@ -46,8 +46,8 @@ Interruptor booleano enlazable a un `State<Boolean>` o a un `Consumer<Boolean>`:
 ```java
 State<Boolean> showHud = new State<>(true);
 
-// Enlace reactivo directo
-GuiToggle toggle = (GuiToggle) new GuiToggle(0, 0, 0, 20, "Mostrar HUD", showHud)
+// Enlace reactivo directo (sin casts)
+GuiToggle toggle = GuiToggle.of("Mostrar HUD", showHud)
     .withPercentWidth(1.0f);
 
 // O con valor inicial y callback
@@ -65,12 +65,11 @@ Los deslizadores trabajan directamente sobre un `State<T>` tipado con límites `
 ```java
 State<Integer> volume = new State<>(50);
 
-GuiSliderInt volumeSlider = (GuiSliderInt) new GuiSliderInt(
-    0, 0, 0, 20, volume, 0, 100, 1
-).withPercentWidth(1.0f);
+GuiSliderInt volumeSlider = GuiSliderInt.of(volume, 0, 100, 1)
+    .withPercentWidth(1.0f);
 ```
 
-También están disponibles `GuiSliderFloat` y `GuiSliderDouble` con la misma firma reactiva.
+También están disponibles `GuiSliderFloat` y `GuiSliderDouble` con la misma firma reactiva, así como `GuiLabel.of(text)` / `GuiLabel.of(text, color)` y `GuiDropdown.of(state, options)`.
 
 ---
 

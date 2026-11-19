@@ -46,19 +46,26 @@ GuiPanel section = GuiPanel.card(10, 6);
 ```
 
 - **Alignment (`FlexAlign`):** Supports `START`, `CENTER`, `END`, and `STRETCH` on cross axis (`setAlignItems`) and main axis (`setJustifyContent`), paired with `GuiPanel.spacer()`.
+- **Elastic Solver (`flexGrow` / `flexShrink` & `min`/`max` Bounds):** Children can declare `withFlexGrow(float)`, `withFlexShrink(float)`, `withFlex(grow, shrink)`, `withMinWidth(int)`, `withMaxWidth(int)`, `withMinHeight(int)`, `withMaxHeight(int)`, `withMinSize(w, h)`, and `withMaxSize(w, h)`. `FlexLayout` runs a *water-filling* solver against `baseWidth`/`baseHeight` to distribute free space or compress overflow within bounds without cumulative frame-to-frame drift.
 - **`hugContent` behavior:** By default `FlexLayout` is **non-destructive** (`hugContent = false`), preserving explicit or percentage parent bounds. Enabling `.withHugContent(true)` fits the container to its visible children.
 - **Circular sizing rule (`VERTICAL` + `hugContent(true)`):** When a container's height is summed from its children, children must specify pixel heights (not `withPercentHeight(...)`) and use `withPercentWidth(...)` for horizontal responsiveness.
 
-### Pillar 3: Mandatory Containment in `GuiScrollPanel`
+### Pillar 3: Mandatory Containment in `GuiScrollPanel` & `GuiGridPanel`
 
-All tall vertical content (lists, forms, stacked sections) must reside inside a `GuiScrollPanel`:
+All tall vertical content (lists, forms, stacked sections) must reside inside a `GuiScrollPanel`, or inside a `GuiGridPanel` for uniform slot or cell grids:
 
 ```java
 // Preconfigured vertical scroll (VERTICAL contentPanel, hugContent=true, 100% width)
 GuiScrollPanel scrollPanel = GuiScrollPanel.vertical(180, 6);
+
+// Dynamic grid with autoColumns and automatic vertical scroll fallback
+GuiGridPanel slotGrid = GuiGridPanel.slotGrid(140, 2);
+slotGrid.addSlots(inventorySlots.inventorySlots, this);
 ```
 
-`GuiScrollPanel` automatically reserves scrollbar width when content overflows the viewport, preventing right-edge clipping at GUI Scale 3x and 4x.
+Both `GuiScrollPanel` and `GuiGridPanel` reserve scrollbar width in a single deterministic pass when content overflows the viewport, preventing right-edge clipping or column oscillation at GUI Scale 3x and 4x.
+
+In inventory screens (`GuiBaseContainer`), side panels can be docked via `attachSidePanel(DockSide, GuiComponent)`, clamping the ensemble within screen bounds (`flexShrink`), updating JEI/HEI `jeiRecipeAreas`, and protecting `hasClickedOutside`.
 
 ### Pillar 4: Hierarchy Preservation on `onScreenResize`
 

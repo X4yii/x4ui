@@ -1,4 +1,4 @@
-# Containers & Panels (`GuiPanel`, `GuiCard`, `GuiScrollPanel`, `GuiSlot`)
+# Containers & Panels (`GuiPanel`, `GuiUnionPanel`, `GuiScrollPanel`, `GuiGridPanel`, `GuiSlot`)
 
 Containers structure the visual hierarchy, arrange children through `ILayoutManager` (`FlexLayout`), and enforce hardware clipping bounds.
 
@@ -6,7 +6,7 @@ Containers structure the visual hierarchy, arrange children through `ILayoutMana
 
 ## 1. `GuiPanel` & Semantic Builders
 
-`GuiPanel` is the base structural container. In `r1.0b6` it provides static semantic factories aligned with the responsive standard:
+`GuiPanel` is the base structural container. It supports per-corner radii (`withCornerRadii`), per-side border bitmasks (`withBorderSides`), and static semantic factories aligned with the responsive standard:
 
 ```java
 // Vertical stack (VERTICAL, hugContent=true, 100% width)
@@ -20,54 +20,48 @@ row.addChild(new GuiButton(0, 0, 20, 20, "X", this::closeScreen));
 
 // Themed card with padding and automatic hugContent height
 GuiPanel card = GuiPanel.card(10, 6);
-```
 
-Manual layout configuration is also supported via `FlexDirection`, `FlexAlign`, and `Insets`:
-
-```java
-GuiPanel panel = new GuiPanel(0, 0, 0, 0).withPercentWidth(1.0f);
-panel.setFlexDirection(FlexDirection.VERTICAL);
-panel.setGap(6);
-panel.setPadding(new Insets(10));
+// Top-docked tab with rounded top corners and no bottom border
+GuiPanel tab = new GuiPanel(0, 0, 80, 22)
+    .withCornerRadii(CornerRadii.top(6))
+    .withBorderSides(BorderSides.without(BorderSides.ALL, BorderSides.BOTTOM));
 ```
 
 ---
 
-## 2. `GuiCard`
+## 2. `GuiUnionPanel` (Seamless Docked Wings)
 
-`GuiCard` extends `GuiPanel` with a built-in header label (`getTitleLabel()`) styled by the active theme:
+`GuiUnionPanel` extends `GuiPanel` to attach docked wing panels (`attachWing(DockSide, GuiPanel, int offset)`) that merge into **one continuous disjoint background** (no alpha overdraw) and an **outer-only border** (eliminating shared seam edges and flattening touching corners):
 
 ```java
-GuiCard card = (GuiCard) new GuiCard(0, 0, 0, 120, "Statistics")
-    .withPercentWidth(1.0f);
+GuiUnionPanel union = new GuiUnionPanel(0, 0, 176, 166);
+union.setBackgroundColor(0xFF1A1D24);
+union.setBorderWidth(1);
+union.setBorderColor(0xFF2D333F);
+union.setCornerRadius(6);
+
+GuiPanel configWing = new GuiPanel(0, 0, 64, 96);
+union.attachWing(DockSide.RIGHT, configWing, 12);
 ```
 
 ---
 
-## 3. `GuiScrollPanel`
+## 3. Cards (`GuiPanel.card`), `GuiScrollPanel` & `GuiGridPanel`
 
-`GuiScrollPanel` wraps an internal `contentPanel` inside a scissored viewport with normalized scroll wheel support (`UIInput`):
+- **`GuiPanel.card(...)`:** creates a themed card container with optional header title and default padding (replacing the legacy `GuiCard` removed in `r1.0b7`).
+- **`GuiScrollPanel`:** wraps `contentPanel` inside a scissored viewport with normalized scroll wheel support (`GuiScrollPanel.vertical(220, 6)`).
+- **`GuiGridPanel`:** extends `GuiScrollPanel` with `autoColumns` calculation, 1-pass scrollbar reservation, and `addSlots(...)`:
 
 ```java
-// Recommended: preconfigured vertical scroll panel
-GuiScrollPanel scroll = GuiScrollPanel.vertical(220, 6);
-scroll.addChild(card1); // addChild() forwards to contentPanel
-scroll.addChild(card2);
+GuiGridPanel grid = GuiGridPanel.slotGrid(120, 2);
+grid.addSlots(inventorySlots.inventorySlots, this);
 ```
-
-When content overflows the viewport height, `GuiScrollPanel` reserves scrollbar width automatically to prevent right-edge clipping.
 
 ---
 
-## 4. `GuiSlot`
+## 4. `GuiSlot` & `GuiBaseContainer.attachSidePanel`
 
-`GuiSlot` integrates a vanilla inventory `Slot` inside `GuiBaseContainer`:
-
-```java
-for (Slot slot : inventorySlots.inventorySlots) {
-    rootPanel.addChild(new GuiSlot(slot, this));
-}
-```
+`GuiSlot` binds a vanilla inventory `Slot` inside `GuiBaseContainer` and re-syncs immediately on layout updates (`onBoundsChanged()`). On `GuiBaseContainer`, `attachSidePanel(DockSide, GuiComponent)` docks side panels to the main window while clamping within viewport bounds, registering `jeiRecipeAreas`, and protecting `hasClickedOutside`.
 
 ---
 

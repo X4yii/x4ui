@@ -1,6 +1,6 @@
 # 00 - Getting Started
 
-X4UI (`r1.0b6`) is a retained-mode UI, reactive state, and server–client framework for **Minecraft Forge 1.12.2 (Java 8 + LWJGL 2)** and **CleanroomMC (Java 25 + LWJGL 3)**.
+X4UI (`r1.0b7`) is a retained-mode UI, reactive state, and server–client framework for **Minecraft Forge 1.12.2 (Java 8 + LWJGL 2)** and **CleanroomMC (Java 25 + LWJGL 3)**.
 
 > *Note: Only the X4UI documentation was drafted with AI (Gemini); all technical specifications and examples were reviewed and approved through human testing (X4yi).*
 
@@ -10,17 +10,21 @@ X4UI (`r1.0b6`) is a retained-mode UI, reactive state, and server–client frame
 
 - **Runtime environments:** Minecraft Forge `1.12.2` (`14.23.5.2847` or later, Java 8) or CleanroomMC (Java 25).
 - **Consumer build target:** `sourceCompatibility = 1.8` and `targetCompatibility = 1.8` to ensure bytecode portability across both runtimes.
-- **Distribution artifact:** always ship and test the `reobfJar` output (`x4ui-r1.0b6.jar`) in production or server environments; `*-dev.jar` is strictly for deobfuscated workspaces.
+- **Distribution artifact:** always ship and test the `reobfJar` output (`x4ui-r1.0b7.jar`) in production or server environments; `*-dev.jar` is strictly for deobfuscated workspaces.
 
 ### Dependency in `build.gradle`
 
 ```gradle
 repositories {
-    maven { url "https://jitpack.io" }
+    maven {
+        name = "Modrinth"
+        url = "https://api.modrinth.com/maven"
+    }
 }
 
 dependencies {
-    deobfCompile "com.github.x4yi:X4UI:r1.0b6"
+    // RetroFuturaGradle (recommended)
+    implementation rfg.deobf("maven.modrinth:x4ui:r1.0b7")
 }
 ```
 
@@ -34,9 +38,9 @@ X4UI enforces strict boundaries between public contracts (`api`), dedicated-serv
 | :--- | :--- |
 | `com.x4yi.x4ui.api.client.gui` | Immediate rendering contract (`IGraphics`). |
 | `com.x4yi.x4ui.api.client.font` | Typography contract (`IFont`). |
-| `com.x4yi.x4ui.api.client.media` | Media service & decoder contracts (`IMediaService`, `IVideoDecoder`, `IAudioDecoder`, `MediaRegistry`). |
+| `com.x4yi.x4ui.api.client.media` | Media decoder contracts (`IVideoDecoder`, `IAudioDecoder`, `MediaRegistry`). |
 | `com.x4yi.x4ui.client.gui` | Client-side remote screen registry (`ScreenRegistry`). |
-| `com.x4yi.x4ui.client.gui.base` | Base screen classes (`GuiBaseScreen`, `GuiBaseContainer`). |
+| `com.x4yi.x4ui.client.gui.base` | Base screen classes & shared host (`GuiBaseScreen`, `GuiBaseContainer`, `ScreenHost`). |
 | `com.x4yi.x4ui.client.gui.component` | UI widgets (`GuiPanel`, `GuiButton`, `GuiLabel`, `GuiImage`, `GuiVideo`, `GuiVirtualList`, etc.). |
 | `com.x4yi.x4ui.client.gui.component.layout` | Flexbox engine (`FlexLayout`, `FlexDirection`, `FlexAlign`, `ILayoutManager`). |
 | `com.x4yi.x4ui.client.gui.component.slider` | Typed sliders (`GuiSlider`, `GuiSliderInt`, `GuiSliderFloat`, `GuiSliderDouble`). |
@@ -71,7 +75,7 @@ import com.x4yi.x4ui.client.gui.base.GuiBaseScreen;
 import com.x4yi.x4ui.client.gui.component.GuiButton;
 import com.x4yi.x4ui.client.gui.component.GuiLabel;
 import com.x4yi.x4ui.client.gui.component.GuiPanel;
-import net.minecraft.client.Minecraft;
+import com.x4yi.x4ui.client.gui.utils.GuiBuilder;
 import net.minecraft.client.gui.GuiScreen;
 
 public class SettingsScreen extends GuiBaseScreen {
@@ -85,18 +89,17 @@ public class SettingsScreen extends GuiBaseScreen {
         GuiPanel window = createCenteredWindow(360, 220);
 
         GuiPanel header = GuiPanel.row(8);
-        header.addChild(new GuiLabel(0, 0, "Settings", 0xFFFFFFFF));
-        header.addChild(GuiPanel.spacer());
-        header.addChild(new GuiButton(0, 0, 20, 20, "X", this::closeScreen));
+        header.add(GuiLabel.of("Settings", 0xFFFFFFFF));
+        header.add(GuiPanel.spacer());
+        header.add(new GuiButton(0, 0, 20, 20, "X", this::closeScreen));
 
         GuiPanel card = GuiPanel.card(10, 6);
-        card.addChild(new GuiButton(0, 0, 0, 22, "Apply", this::onApply)
+        card.add(GuiButton.of("Apply", this::onApply)
             .withPercentWidth(1.0f)
             .withVariant(GuiButton.Variant.PRIMARY));
 
-        window.addChild(header);
-        window.addChild(card);
-        rootPanel.addChild(window);
+        window.add(header);
+        window.add(card);
     }
 
     private void onApply() {
@@ -104,7 +107,7 @@ public class SettingsScreen extends GuiBaseScreen {
     }
 
     public static void open(GuiScreen parent) {
-        Minecraft.getMinecraft().displayGuiScreen(new SettingsScreen(parent));
+        GuiBuilder.open(new SettingsScreen(parent));
     }
 }
 ```
@@ -141,26 +144,38 @@ public class MachineScreen extends GuiBaseContainer {
 
 ---
 
-## 4. Fluent API on `GuiComponent` & `GuiBuilder`
+## 4. Cast-Free Composition & `GuiBuilder`
 
-All components expose chainable builder methods on `GuiComponent` for percentage sizing, spacing, and z-layer ordering:
+In `r1.0b7`, core widgets provide flex-first `.of(...)` factories and covariant fluent setters, and `GuiComponent` exposes `add(T child)` / `add(T child, Consumer<T> config)` so consumer mods never need manual casts:
 
 ```java
-GuiButton actionBtn = (GuiButton) new GuiButton(0, 0, 0, 22, "Confirm", this::onConfirm)
-    .withPercentWidth(1.0f)
-    .withMargin(new Insets(4))
-    .withLayer(5);
+GuiButton actionBtn = card.add(
+    GuiButton.of("Confirm", this::onConfirm)
+        .withPercentWidth(1.0f)
+        .withMargin(new Insets(4))
+        .withTooltip("Saves the current configuration"),
+    btn -> btn.withVariant(GuiButton.Variant.PRIMARY)
+);
 ```
 
-For declarative container construction, `GuiBuilder` is also available:
+For screens and modals without importing `GuiScreen` or `Minecraft.getMinecraft().displayGuiScreen(...)`, use **`GuiBuilder`** as the official entry point:
 
 ```java
-GuiPanel panel = GuiBuilder.createPanel()
-    .size(240, 180)
-    .flexDirection(FlexDirection.VERTICAL)
-    .gap(6)
-    .padding(new Insets(8))
-    .build();
+// Fluent screen builder (use .build() for ScreenRegistry, or .open() directly)
+GuiBuilder.screen("Quick Settings")
+    .window(360, 220)
+    .animateOpen(true)
+    .onInit((screen, window) -> {
+        window.add(GuiLabel.of("Quick Settings", 0xFFFFFFFF));
+        window.add(GuiButton.of("Close", screen::closeScreen).withPercentWidth(1.0f));
+    })
+    .open();
+
+// One-call standard modal (includes header + close button)
+GuiBuilder.modal("Confirm Action", 300, 140, body -> {
+    body.add(GuiLabel.of("Apply changes now?"));
+    body.add(GuiButton.of("OK", GuiBuilder::close).withPercentWidth(1.0f));
+});
 ```
 
 ---

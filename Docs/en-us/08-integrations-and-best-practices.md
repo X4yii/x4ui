@@ -1,6 +1,6 @@
 # 08 - Integrations & Best Practices
 
-This document covers X4UI's architectural conventions (`r1.0b6`), native Just Enough Items (JEI) integration, and recommended practices for consumer mods.
+This document covers X4UI's architectural conventions (`r1.0b7`), native Just Enough Items (JEI) integration, and recommended practices for consumer mods.
 
 ---
 
@@ -49,3 +49,4 @@ public class EnergyCard extends GuiPanel {
 2. **Lambda captures:** avoid capturing `GuiScreen` instances inside `Scope.GLOBAL` or `Scope.SESSION` listeners; prefer `Scope.SCREEN` or `syncedState(...)` in `GuiBaseScreen`.
 3. **Single-pass initialization:** instantiate components, register fonts (`FontRegistry`), and trigger media fetches (`MediaPipeline`) during initialization, never inside `update()` or `renderSelf()`.
 4. **Structured logging:** use `org.apache.logging.log4j.LogManager` instead of `System.out.println` or `printStackTrace()`.
+5. **Consumer entry point & cast-free wiring:** prefer `GuiBuilder.screen(...)`, `GuiBuilder.modal(...)`, `GuiBuilder.open(...)`, and `GuiBuilder.close()` instead of calling `Minecraft.getMinecraft().displayGuiScreen(...)` directly, and compose widgets via `parent.add(child, cfg)` with `.of(...)` factories.

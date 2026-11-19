@@ -53,13 +53,15 @@ gfx.popColorTint();
 gfx.popAlpha();
 ```
 
-### Hardware Scissor Clipping (`pushClip()` / `popClip()`)
+### Hardware Scissor Clipping (`pushClip()` / `popClip()`) & Custom Culling
 
 ```java
 gfx.pushClip(absX, absY, width, height);
 renderOverflowingContent(gfx);
 gfx.popClip();
 ```
+
+`GuiComponent.isClippedBy(IGraphics gfx)` controls viewport culling against the active clip rectangle. Composite widgets whose visual footprint extends beyond their base bounds (such as `GuiUnionPanel`, which overrides `isClippedBy` using `getUnionBounds()`) can override it so visible wings are never culled prematurely.
 
 ---
 
@@ -68,9 +70,9 @@ gfx.popClip();
 | Method | Purpose |
 | :--- | :--- |
 | `drawRect(x, y, w, h, color)` | Solid ARGB rectangle. |
-| `drawRoundedRect(x, y, w, h, radius, color)` | Rounded-corner rectangle. |
-| `drawBorder(x, y, w, h, thickness, color)` | Rectangular border with configurable thickness. |
-| `drawRoundedBorder(x, y, w, h, radius, thickness, color)` | Rounded outer border. |
+| `drawRoundedRect(x, y, w, h, radius \| CornerRadii, color)` | Rounded rectangle with uniform radius or per-corner `CornerRadii`. |
+| `drawBorder(x, y, w, h, thickness, [borderSides,] color)` | Full or bitmask-filtered rectangular border (`BorderSides`), batched into a single OpenGL draw call. |
+| `drawRoundedBorder(x, y, w, h, radius \| CornerRadii, thickness, [borderSides,] color)` | Full or per-side rounded border (`TOP \| RIGHT \| BOTTOM \| LEFT`). |
 | `drawLine(x1, y1, x2, y2, thickness, color)` | Line segment between two points. |
 | `drawCircle(centerX, centerY, radius, color)` | Filled circle. |
 | `drawGradient(x, y, w, h, topColor, bottomColor)` | Vertical two-color gradient. |

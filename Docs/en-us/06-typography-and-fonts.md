@@ -1,6 +1,6 @@
 # 06 - Vector Typography & Fonts (`IFont`)
 
-This document covers X4UI's typography system (`r1.0b6`), centered on the `IFont` contract (`com.x4yi.x4ui.api.client.font.IFont`) and the central `FontRegistry`.
+This document covers X4UI's typography system (`r1.0b7`), centered on the `IFont` contract (`com.x4yi.x4ui.api.client.font.IFont`) and the central `FontRegistry`.
 
 ---
 
@@ -10,7 +10,7 @@ Vanilla's `FontRenderer` relies on fixed bitmap sheets that blur or alias under 
 
 X4UI solves this with four design decisions:
 1. **`IFont` abstraction:** Unifies `VanillaFont` and `TrueTypeFont` behind one measurement and rendering contract.
-2. **Dynamic VRAM glyph atlas (`TrueTypeFont`):** Rasterizes glyphs on demand with anti-aliasing and full vanilla formatting code support (`§0`–`§f`, `§l`, `§o`, `§n`).
+2. **Dynamic VRAM glyph atlas (`TrueTypeFont`):** Rasterizes glyphs on demand with anti-aliasing and full vanilla formatting code support (`§0`–`§f`, `§l`, `§o`, `§n`). Once uploaded to GPU (`DynamicTexture`), the CPU-side `BufferedImage` atlas (~4 MB per font) is immediately released from heap.
 3. **Bounded width cache (`FontWidthCache`):** LRU eviction caches repeated width lookups without unbounded memory growth.
 4. **Centralized lifecycle (`FontRegistry`):** Ensures single-load registration and transparent hot-reloading on `F3 + T`.
 

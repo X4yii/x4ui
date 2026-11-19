@@ -1,6 +1,6 @@
 # Buttons & Inputs (`GuiButton`, `GuiTextInput`, `GuiToggle`, `GuiSlider`)
 
-Primary interactive widgets follow X4UI's reactive `State<T>` paradigm and `GuiComponent` fluent API, avoiding manual event boilerplate.
+Primary interactive widgets follow X4UI's reactive `State<T>` paradigm and `GuiComponent` fluent API, avoiding manual event boilerplate. In `r1.0b7`, core widgets provide flex-first `.of(...)` factories and covariant fluent setters (`withPercentWidth`, `withMargin`, `withFlexGrow`, `withFlexShrink`, `withMinSize`, `withMaxSize`, `withTooltip`), eliminating manual casts.
 
 ---
 
@@ -9,7 +9,7 @@ Primary interactive widgets follow X4UI's reactive `State<T>` paradigm and `GuiC
 Interactive button with theme variants (`DEFAULT`, `PRIMARY`, `SECONDARY`, `SUCCESS`, `DANGER`, `GHOST`) and tooltip support:
 
 ```java
-GuiButton saveBtn = (GuiButton) new GuiButton(0, 0, 0, 22, "Save", () -> {
+GuiButton saveBtn = GuiButton.of("Save", () -> {
     // Click action
 })
     .withPercentWidth(1.0f)
@@ -26,7 +26,7 @@ Text field supporting focus management, cursor rendering, selection, clipboard o
 ```java
 State<String> username = new State<>("");
 
-GuiTextInput input = (GuiTextInput) new GuiTextInput(0, 0, 0, 20, username)
+GuiTextInput input = GuiTextInput.of(username)
     .setSubmitKey(KeyCodes.ENTER)
     .onEnter(() -> submitForm(username.get()))
     .setOnTextChanged(txt -> {
@@ -46,8 +46,8 @@ Boolean switch bound either to a `State<Boolean>` or an explicit `Consumer<Boole
 ```java
 State<Boolean> showHud = new State<>(true);
 
-// Direct reactive binding
-GuiToggle toggle = (GuiToggle) new GuiToggle(0, 0, 0, 20, "Show HUD", showHud)
+// Direct reactive binding (cast-free)
+GuiToggle toggle = GuiToggle.of("Show HUD", showHud)
     .withPercentWidth(1.0f);
 
 // Or explicit initial value + callback
@@ -65,12 +65,11 @@ Sliders bind directly to a typed `State<T>` with `min`, `max`, and `step`:
 ```java
 State<Integer> volume = new State<>(50);
 
-GuiSliderInt volumeSlider = (GuiSliderInt) new GuiSliderInt(
-    0, 0, 0, 20, volume, 0, 100, 1
-).withPercentWidth(1.0f);
+GuiSliderInt volumeSlider = GuiSliderInt.of(volume, 0, 100, 1)
+    .withPercentWidth(1.0f);
 ```
 
-`GuiSliderFloat` and `GuiSliderDouble` follow the same reactive constructor pattern.
+`GuiSliderFloat` and `GuiSliderDouble` follow the same reactive constructor pattern. `GuiLabel.of(text)` / `GuiLabel.of(text, color)` and `GuiDropdown.of(state, options)` provide matching cast-free factories.
 
 ---
 
